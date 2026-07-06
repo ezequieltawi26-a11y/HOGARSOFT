@@ -1003,8 +1003,8 @@ function VistaTaller({ data, guardar, notificar, taller }) {
               {esCorte && o.cierreCortePropuesto?.estado === "pendiente" && (
                 <div style={{ marginBottom: 10 }}><Chip tipo="warn">Pediste cerrar con {fmt(o.cierreCortePropuesto.faltante)} faltantes — esperando al dueño</Chip></div>
               )}
-              {esCorte && Number(o.descuentoTela || 0) > 0 && (
-                <div style={{ marginBottom: 10 }}><Chip tipo="bad">Descuento por desperdicio: {money(o.descuentoTela)}</Chip></div>
+              {esCorte && o.corteCerrado && calcDesperdicioOrden(data, o).monto > 0 && (
+                <div style={{ marginBottom: 10 }}><Chip tipo="bad">Descuento por desperdicio: {money(calcDesperdicioOrden(data, o).monto)}</Chip></div>
               )}
               {!esCorte && (
                 <table style={{ marginBottom: 10 }}>
