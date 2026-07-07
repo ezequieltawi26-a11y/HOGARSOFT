@@ -105,12 +105,18 @@ function calcDesperdicioOrden(data, o) {
   return { metros, usados, faltanteTotal, pct, exceso, metrosExceso, monto };
 }
 
+function calcDescuentoCostura(data, o) {
+  const faltante = Number(o.faltanteCostura || 0);
+  const monto = o.costuraCerrado ? faltante * Number(o.precioCostura || 0) : 0;
+  return { faltante, monto };
+}
+
 /* ---------- Deuda por taller ---------- */
 function deudaTaller(data, tallerId) {
   let devengado = 0;
   data.ordenes.forEach((o) => {
     const k = calcOrden(o);
-    if (o.tallerCorteId === tallerId) devengado += k.cortadas * Number(o.precioCorte || 0) - calcDesperdicioOrden(data, o).monto;
+    if (o.tallerCorteId === tallerId) devengado += k.cortadas * Number(o.precioCorte || 0);
     if (o.tallerCosturaId === tallerId) devengado += k.recibidas * Number(o.precioCostura || 0);
   });
   const pagado = data.pagos
@@ -355,6 +361,7 @@ export default function App() {
   data.ordenes.forEach((o) => {
     if (o.propuestaReduccion?.estado === "pendiente") porConfirmar++;
     if (o.cierreCortePropuesto?.estado === "pendiente") porConfirmar++;
+    if (o.cierreCosturaPropuesto?.estado === "pendiente") porConfirmar++;
     (o.entregasCorte || []).forEach((e) => { if (e.aceptada === false) porConfirmar++; });
     (o.recepciones || []).forEach((e) => { if (e.aceptada === false) porConfirmar++; });
   });
@@ -558,6 +565,7 @@ function VistaTaller({ data, guardar, notificar, taller }) {
   const d = deudaTaller(data, taller.id);
   const [tab, setTab] = useState("aceptar");
   const [rapido, setRapido] = useState({ productoId: "", cantidad: "", fecha: hoy() });
+  const [envCos, setEnvCos] = useState({ ordenId: "", cantidad: "", tipo: "parcial", fecha: hoy() });
   const [envC, setEnvC] = useState({ ordenId: "", cantidad: "", tipo: "parcial", fecha: hoy() });
   const [specColores, setSpecColores] = useState([{ color: "", cantidad: "" }]);
   const [specMedidas, setSpecMedidas] = useState([{ nombre: "", medida: "" }]);
@@ -660,7 +668,7 @@ function VistaTaller({ data, guardar, notificar, taller }) {
     ["saldo", "Lo que me deben"],
     ["enviar", "Enviar productos"],
     ["stock", "Mi stock"],
-    ...(esCorte ? [["descuentos", "Descuentos"]] : []),
+    ["descuentos", "Descuentos"],
     ["ordenes", "Todas las órdenes"],
   ];
 
@@ -968,46 +976,72 @@ function VistaTaller({ data, guardar, notificar, taller }) {
         );
       })()}
 
-      {tab === "enviar" && !esCorte && (
-        <>
-          <Card style={{ marginBottom: 14 }}>
-            <b>Stock en mi taller (por producto)</b>
-            {Object.keys(stockProd).length === 0 ? (
-              <Vacio>No tenés prendas disponibles para enviar.</Vacio>
+      {tab === "enviar" && !esCorte && (() => {
+        const partidasCos = activas.filter(({ o, k }) => !o.costuraCerrado && k.enCostura > 0 && o.cierreCosturaPropuesto?.estado !== "pendiente");
+        const item = partidasCos.find(({ o }) => o.id === envCos.ordenId);
+        const enviarPartidaCostura = () => {
+          if (!item) return notificar("Elegí la partida.");
+          const { o, k } = item;
+          const c = Number(envCos.cantidad);
+          if (!c || c <= 0) return notificar("Ingresá una cantidad válida.");
+          if (c > k.enCostura) return notificar(`Solo te quedan ${fmt(k.enCostura)} prendas en esa partida.`);
+          const cambios = { recepciones: [...(o.recepciones || []), { fecha: envCos.fecha, cantidad: c, estado: "A revisar", responsable: taller.nombre, obs: "", aceptada: false }] };
+          let msg = "Envío registrado. La fábrica debe aceptarlo.";
+          let mov = `El taller de costura ${taller.nombre} envió ${fmt(c)} prendas a fábrica (pendiente de aceptación).`;
+          if (envCos.tipo === "total" && c < k.enCostura) {
+            cambios.cierreCosturaPropuesto = { faltante: k.enCostura - c, fecha: hoy(), estado: "pendiente" };
+            mov += ` Además pidió cerrar la partida con ${fmt(k.enCostura - c)} faltantes.`;
+            msg = "Envío registrado. El dueño debe aceptar el faltante.";
+          }
+          actualizarOrden(o, cambios, mov, msg);
+          const pdfFab = pdfReciboEntrega({
+            numero: o.numero, fecha: fFecha(envCos.fecha),
+            tallerEntrega: taller.nombre, recibe: "Fábrica",
+            nroRecibo: `#REC-${o.numero}-${taller.nombre}`,
+            producto: nombreProducto(data, o.productoId), colores: (data.productos.find((p) => p.id === o.productoId) || {}).colores,
+            cantidad: fmt(c), pendiente: fmt(k.enCostura - c),
+            observaciones: "Envío pendiente de aceptación por fábrica.",
+          });
+          enviarPDF(pdfFab, `recibo-envio-fabrica-${o.numero}.pdf`, { whatsapp: data.whatsappFabrica }, `Orden #${o.numero}: envío de ${fmt(c)} prendas a fábrica.`);
+          setEnvCos({ ordenId: "", cantidad: "", tipo: "parcial", fecha: hoy() });
+        };
+        return (
+          <Card style={{ borderLeft: `4px solid ${C.indigo}` }}>
+            <b>Enviar a fábrica (por partida)</b>
+            {partidasCos.length === 0 ? (
+              <Vacio>No tenés partidas con prendas para enviar.</Vacio>
             ) : (
-              <div className="tabla" style={{ marginTop: 8 }}>
-                <table>
-                  <thead><tr><th>Producto</th><th>Unidades</th></tr></thead>
-                  <tbody>
-                    {Object.entries(stockProd).map(([pid, cant]) => (
-                      <tr key={pid}><td><b>{nombreProducto(data, pid)}</b></td><td style={{ fontWeight: 800 }}>{fmt(cant)} u.</td></tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px,1fr))", gap: 8, alignItems: "end", marginTop: 10 }}>
+                  <Campo label="N° de partida">
+                    <select value={envCos.ordenId} onChange={(e) => setEnvCos({ ...envCos, ordenId: e.target.value })}>
+                      <option value="">Elegir…</option>
+                      {partidasCos.map(({ o, k }) => (
+                        <option key={o.id} value={o.id}>#{o.numero} — {nombreProducto(data, o.productoId)} (pend.: {fmt(k.enCostura)})</option>
+                      ))}
+                    </select>
+                  </Campo>
+                  <Campo label="Cantidad que mando"><input type="number" value={envCos.cantidad} onChange={(e) => setEnvCos({ ...envCos, cantidad: e.target.value })} /></Campo>
+                  <Campo label="¿Mando todo o parcial?">
+                    <select value={envCos.tipo} onChange={(e) => setEnvCos({ ...envCos, tipo: e.target.value })}>
+                      <option value="parcial">Parcial (sigo cosiendo)</option>
+                      <option value="total">Total (termino la partida)</option>
+                    </select>
+                  </Campo>
+                  <Campo label="Fecha"><input type="date" value={envCos.fecha} onChange={(e) => setEnvCos({ ...envCos, fecha: e.target.value })} /></Campo>
+                  <BotonP onClick={enviarPartidaCostura}>Enviar</BotonP>
+                </div>
+                {item && envCos.tipo === "total" && Number(envCos.cantidad) > 0 && Number(envCos.cantidad) < item.k.enCostura && (
+                  <div style={{ marginTop: 10, background: C.warnBg, borderRadius: 8, padding: "9px 12px", color: C.warn, fontWeight: 600 }}>
+                    Vas a cerrar con {fmt(item.k.enCostura - Number(envCos.cantidad))} prendas faltantes.
+                    Se te va a descontar: <b>{money((item.k.enCostura - Number(envCos.cantidad)) * Number(item.o.precioCostura || 0))}</b>. El dueño debe aceptarlo.
+                  </div>
+                )}
+              </>
             )}
           </Card>
-          {Object.keys(stockProd).length > 0 && (
-            <Card style={{ borderLeft: `4px solid ${C.indigo}` }}>
-              <b>Enviar a {esCorte ? "costura" : "fábrica"}</b>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px,1fr))", gap: 8, alignItems: "end", marginTop: 10 }}>
-                <Campo label="Producto">
-                  <select value={rapido.productoId} onChange={(e) => setRapido({ ...rapido, productoId: e.target.value })}>
-                    <option value="">Elegir…</option>
-                    {Object.entries(stockProd).map(([pid, cant]) => (
-                      <option key={pid} value={pid}>{nombreProducto(data, pid)} ({fmt(cant)} disp.)</option>
-                    ))}
-                  </select>
-                </Campo>
-                <Campo label="Cantidad"><input type="number" value={rapido.cantidad} onChange={(e) => setRapido({ ...rapido, cantidad: e.target.value })} /></Campo>
-                <Campo label="Fecha"><input type="date" value={rapido.fecha} onChange={(e) => setRapido({ ...rapido, fecha: e.target.value })} /></Campo>
-                <BotonP onClick={enviarRapido}>Enviar</BotonP>
-              </div>
-              <div style={{ fontSize: 12, color: C.sub, marginTop: 8 }}>Se descuenta de tus órdenes más antiguas primero. Nunca podés enviar más de lo que tenés.</div>
-            </Card>
-          )}
-        </>
-      )}
+        );
+      })()}
 
       {tab === "stock" && (
         <Card>
@@ -1030,6 +1064,7 @@ function VistaTaller({ data, guardar, notificar, taller }) {
       {tab === "descuentos" && esCorte && (
         <Card>
           <b>Descuentos por desperdicio de tela</b>
+          <div style={{ fontSize: 12, color: C.sub, marginTop: 4 }}>Esto es solo informativo. No afecta lo que aparece en «Lo que me deben».</div>
           {(() => {
             const conDesc = todas.filter(({ o }) => o.corteCerrado && calcDesperdicioOrden(data, o).monto > 0);
             if (conDesc.length === 0) return <Vacio>No tenés descuentos. ¡Bien!</Vacio>;
@@ -1054,6 +1089,39 @@ function VistaTaller({ data, guardar, notificar, taller }) {
                       );
                     })}
                     <tr style={{ background: "#FAF9F5" }}><td colSpan={6}><b>TOTAL A DESCONTAR</b></td><td style={{ color: C.bad, fontWeight: 800 }}>{money(totalDesc)}</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            );
+          })()}
+        </Card>
+      )}
+
+      {tab === "descuentos" && !esCorte && (
+        <Card>
+          <b>Descuentos por prendas faltantes</b>
+          <div style={{ fontSize: 12, color: C.sub, marginTop: 4 }}>Esto es solo informativo. No afecta lo que aparece en «Lo que me deben».</div>
+          {(() => {
+            const conDesc = todas.filter(({ o }) => o.costuraCerrado && calcDescuentoCostura(data, o).monto > 0);
+            if (conDesc.length === 0) return <Vacio>No tenés descuentos. ¡Bien!</Vacio>;
+            const totalDesc = conDesc.reduce((a, { o }) => a + calcDescuentoCostura(data, o).monto, 0);
+            return (
+              <div className="tabla" style={{ marginTop: 8 }}>
+                <table>
+                  <thead><tr><th>Partida</th><th>Producto</th><th>Prendas faltantes</th><th>Monto a descontar</th></tr></thead>
+                  <tbody>
+                    {conDesc.map(({ o }) => {
+                      const d = calcDescuentoCostura(data, o);
+                      return (
+                        <tr key={o.id}>
+                          <td><b>#{o.numero}</b></td>
+                          <td>{nombreProducto(data, o.productoId)}</td>
+                          <td style={{ color: C.bad, fontWeight: 700 }}>{fmt(d.faltante)} u.</td>
+                          <td style={{ color: C.bad, fontWeight: 800 }}>{money(d.monto)}</td>
+                        </tr>
+                      );
+                    })}
+                    <tr style={{ background: "#FAF9F5" }}><td colSpan={3}><b>TOTAL A DESCONTAR</b></td><td style={{ color: C.bad, fontWeight: 800 }}>{money(totalDesc)}</td></tr>
                   </tbody>
                 </table>
               </div>
@@ -1107,6 +1175,12 @@ function VistaTaller({ data, guardar, notificar, taller }) {
               {esCorte && o.corteCerrado && calcDesperdicioOrden(data, o).monto > 0 && (
                 <div style={{ marginBottom: 10 }}><Chip tipo="bad">Descuento por desperdicio: {money(calcDesperdicioOrden(data, o).monto)}</Chip></div>
               )}
+              {!esCorte && o.cierreCosturaPropuesto?.estado === "pendiente" && (
+                <div style={{ marginBottom: 10 }}><Chip tipo="warn">Pediste cerrar con {fmt(o.cierreCosturaPropuesto.faltante)} faltantes — esperando al dueño</Chip></div>
+              )}
+              {!esCorte && o.costuraCerrado && calcDescuentoCostura(data, o).monto > 0 && (
+                <div style={{ marginBottom: 10 }}><Chip tipo="bad">Descuento por faltantes: {money(calcDescuentoCostura(data, o).monto)}</Chip></div>
+              )}
               {!esCorte && (
                 <table style={{ marginBottom: 10 }}>
                   <thead><tr><th>Entregas del corte</th><th>Cantidad</th><th>Estado</th></tr></thead>
@@ -1158,6 +1232,7 @@ function ConfirmarAdmin({ data, guardar, notificar }) {
     const k = calcOrden(o);
     if (o.propuestaReduccion?.estado === "pendiente") items.push({ tipo: "red", o, k });
     if (o.cierreCortePropuesto?.estado === "pendiente") items.push({ tipo: "cierre", o, k });
+    if (o.cierreCosturaPropuesto?.estado === "pendiente") items.push({ tipo: "cierreCos", o, k });
     (o.entregasCorte || []).forEach((e, i) => { if (e.aceptada === false) items.push({ tipo: "corte", o, e, i }); });
     (o.recepciones || []).forEach((e, i) => { if (e.aceptada === false) items.push({ tipo: "fab", o, e, i }); });
   });
@@ -1191,6 +1266,12 @@ function ConfirmarAdmin({ data, guardar, notificar }) {
                   );
                 })()}
                 {it.tipo === "corte" && <span>Corte → Costura: <b>{fmt(it.e.cantidad)} prendas</b> ({fFecha(it.e.fecha)})</span>}
+                {it.tipo === "cierreCos" && (
+                  <span>
+                    El taller de costura <b>{nombreTaller(data, o.tallerCosturaId)}</b> quiere cerrar la partida con <b>{fmt(o.cierreCosturaPropuesto.faltante)} prendas faltantes</b>.<br />
+                    Plata a descontar: <b style={{ color: C.bad }}>{money(o.cierreCosturaPropuesto.faltante * Number(o.precioCostura || 0))}</b>
+                  </span>
+                )}
                 {it.tipo === "fab" && <span>Costura → Fábrica: <b>{fmt(it.e.cantidad)} prendas</b> ({fFecha(it.e.fecha)})</span>}
               </div>
               <div style={{ display: "flex", gap: 8 }}>
@@ -1202,14 +1283,24 @@ function ConfirmarAdmin({ data, guardar, notificar }) {
                 ) : it.tipo === "cierre" ? (
                   <>
                     <BotonP onClick={() => {
-                      act(o, { corteCerrado: true, faltanteCorte: o.cierreCortePropuesto.faltante, cierreCortePropuesto: { ...o.cierreCortePropuesto, estado: "aceptada" } },
-                        `Se aceptó el cierre de corte con ${fmt(o.cierreCortePropuesto.faltante)} faltantes.`,
-                        "Cierre aceptado. El descuento se calcula con el precio actual de la tela.");
+                      const nuevaCantidad = it.k.teoricas - o.cierreCortePropuesto.faltante;
+                      act(o, { corteCerrado: true, faltanteCorte: o.cierreCortePropuesto.faltante, prendasTeoricas: nuevaCantidad, cierreCortePropuesto: { ...o.cierreCortePropuesto, estado: "aceptada" } },
+                        `Se aceptó el cierre de corte con ${fmt(o.cierreCortePropuesto.faltante)} faltantes. El pedido queda en ${fmt(nuevaCantidad)} prendas.`,
+                        "Cierre aceptado. La costura ya ve la cantidad actualizada.");
                     }}>Aceptar</BotonP>
                     <BotonS style={{ color: C.bad }} onClick={() => act(o, { cierreCortePropuesto: { ...o.cierreCortePropuesto, estado: "rechazada" } }, "Se rechazó el cierre con faltante propuesto por el corte.", "Rechazado.")}>Rechazar</BotonS>
                   </>
                 ) : it.tipo === "corte" ? (
                   <BotonP onClick={() => act(o, { entregasCorte: o.entregasCorte.map((x, j) => (j === it.i ? { ...x, aceptada: true } : x)) }, `Se aceptó la entrega de ${fmt(it.e.cantidad)} prendas en costura.`, "Aceptado.")}>Aceptar</BotonP>
+                ) : it.tipo === "cierreCos" ? (
+                  <>
+                    <BotonP onClick={() => {
+                      act(o, { costuraCerrado: true, faltanteCostura: o.cierreCosturaPropuesto.faltante, cierreCosturaPropuesto: { ...o.cierreCosturaPropuesto, estado: "aceptada" } },
+                        `Se aceptó el cierre de costura con ${fmt(o.cierreCosturaPropuesto.faltante)} faltantes.`,
+                        "Cierre aceptado.");
+                    }}>Aceptar</BotonP>
+                    <BotonS style={{ color: C.bad }} onClick={() => act(o, { cierreCosturaPropuesto: { ...o.cierreCosturaPropuesto, estado: "rechazada" } }, "Se rechazó el cierre con faltante propuesto por costura.", "Rechazado.")}>Rechazar</BotonS>
+                  </>
                 ) : (
                   <BotonP onClick={() => act(o, { recepciones: o.recepciones.map((x, j) => (j === it.i ? { ...x, aceptada: true, estado: "OK" } : x)) }, `La fábrica aceptó ${fmt(it.e.cantidad)} prendas de costura.`, "Aceptado. Stock actualizado.")}>Aceptar</BotonP>
                 )}
@@ -2324,8 +2415,8 @@ function DetalleOrden({ data, guardar, ordenId, volver, notificar }) {
 
   const cerrarCorte = () => {
     actualizar(
-      { corteCerrado: true, faltanteCorte: k.enCorte },
-      `Se cerró la etapa de CORTE con ${fmt(k.enCorte)} prendas faltantes.`,
+      { corteCerrado: true, faltanteCorte: k.enCorte, prendasTeoricas: k.cortadas },
+      `Se cerró la etapa de CORTE con ${fmt(k.enCorte)} prendas faltantes. El pedido queda en ${fmt(k.cortadas)} prendas.`,
       "Corte cerrado con faltante."
     );
     setConfirmar(null);
@@ -2674,7 +2765,8 @@ function Pagos({ data, guardar, notificar }) {
       </Card>
 
       <Card style={{ marginBottom: 16 }}>
-        <b>Descuentos por desperdicio de tela</b>
+        <b>Descuentos por desperdicio de tela (corte)</b>
+        <div style={{ fontSize: 12, color: C.sub, marginTop: 4 }}>Informativo. No se resta de «Lo que le debo» abajo.</div>
         {(() => {
           const conDesc = data.ordenes.filter((o) => o.corteCerrado && calcDesperdicioOrden(data, o).monto > 0);
           if (conDesc.length === 0) return <Vacio>Sin descuentos aplicados.</Vacio>;
@@ -2697,6 +2789,37 @@ function Pagos({ data, guardar, notificar }) {
                     );
                   })}
                   <tr style={{ background: "#FAF9F5" }}><td colSpan={4}><b>TOTAL A DESCONTAR</b></td><td style={{ color: C.bad, fontWeight: 800 }}>{money(total)}</td></tr>
+                </tbody>
+              </table>
+            </div>
+          );
+        })()}
+      </Card>
+
+      <Card style={{ marginBottom: 16 }}>
+        <b>Descuentos por prendas faltantes (costura)</b>
+        <div style={{ fontSize: 12, color: C.sub, marginTop: 4 }}>Informativo. No se resta de «Lo que le debo» abajo.</div>
+        {(() => {
+          const conDesc = data.ordenes.filter((o) => o.costuraCerrado && calcDescuentoCostura(data, o).monto > 0);
+          if (conDesc.length === 0) return <Vacio>Sin descuentos aplicados.</Vacio>;
+          const total = conDesc.reduce((a, o) => a + calcDescuentoCostura(data, o).monto, 0);
+          return (
+            <div className="tabla" style={{ marginTop: 8 }}>
+              <table>
+                <thead><tr><th>Taller</th><th>Partida</th><th>Prendas faltantes</th><th>Monto a descontar</th></tr></thead>
+                <tbody>
+                  {conDesc.map((o) => {
+                    const d = calcDescuentoCostura(data, o);
+                    return (
+                      <tr key={o.id}>
+                        <td><b>{nombreTaller(data, o.tallerCosturaId)}</b></td>
+                        <td>#{o.numero} — {nombreProducto(data, o.productoId)}</td>
+                        <td style={{ color: C.bad }}>{fmt(d.faltante)} u.</td>
+                        <td style={{ color: C.bad, fontWeight: 800 }}>{money(d.monto)}</td>
+                      </tr>
+                    );
+                  })}
+                  <tr style={{ background: "#FAF9F5" }}><td colSpan={3}><b>TOTAL A DESCONTAR</b></td><td style={{ color: C.bad, fontWeight: 800 }}>{money(total)}</td></tr>
                 </tbody>
               </table>
             </div>
