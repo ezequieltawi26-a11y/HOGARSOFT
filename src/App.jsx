@@ -656,6 +656,7 @@ function VistaTaller({ data, guardar, notificar, taller }) {
 
   const botones = [
     ["aceptar", `Por aceptar${pendientes.length ? " (" + pendientes.length + ")" : ""}`],
+    ...(!esCorte ? [["recibidos", "Pedidos recibidos"]] : []),
     ["saldo", "Lo que me deben"],
     ["enviar", "Enviar productos"],
     ["stock", "Mi stock"],
@@ -705,6 +706,63 @@ function VistaTaller({ data, guardar, notificar, taller }) {
             </div>
           )}
         </Card>
+      )}
+
+      {tab === "recibidos" && !esCorte && (
+        <>
+          {todas.length === 0 && <Card><Vacio>Todavía no te enviaron ningún pedido.</Vacio></Card>}
+          {todas.slice().reverse().map(({ o, k }) => (
+            <Card key={o.id} style={{ marginBottom: 14 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: 6 }}>
+                <b>N° de producción #{o.numero} — {nombreProducto(data, o.productoId)}</b>
+                <Chip tipo={k.color}>{k.estado}</Chip>
+              </div>
+              <div style={{ fontSize: 13, color: C.sub, marginBottom: 10 }}>Pedido total: <b style={{ color: C.ink }}>{fmt(k.teoricas)} u.</b></div>
+
+              {(o.coloresSpec && o.coloresSpec.length > 0) || (o.medidasSpec && o.medidasSpec.length > 0) ? (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px,1fr))", gap: 12, marginBottom: 12, background: "#FAF9F5", border: `1px solid ${C.line}`, borderRadius: 8, padding: 10 }}>
+                  {o.coloresSpec && o.coloresSpec.length > 0 && (
+                    <div>
+                      <b style={{ fontSize: 12 }}>Colores y cantidades</b>
+                      {o.coloresSpec.map((c, i) => <div key={i} style={{ fontSize: 13 }}>{c.color}: <b>{fmt(c.cantidad)}</b></div>)}
+                    </div>
+                  )}
+                  {o.medidasSpec && o.medidasSpec.length > 0 && (
+                    <div>
+                      <b style={{ fontSize: 12 }}>Medidas</b>
+                      {o.medidasSpec.map((m, i) => <div key={i} style={{ fontSize: 13 }}>{m.nombre}: <b>{m.medida}</b></div>)}
+                    </div>
+                  )}
+                </div>
+              ) : null}
+
+              <b style={{ fontSize: 13 }}>Entregas del corte</b>
+              {(o.entregasCorte || []).length === 0 ? (
+                <div style={{ color: C.sub, fontSize: 13, marginTop: 6 }}>Todavía no te mandaron nada.</div>
+              ) : (
+                (() => {
+                  let acumulado = 0;
+                  return (o.entregasCorte || []).map((e, i) => {
+                    acumulado += Number(e.cantidad);
+                    const esParcial = acumulado < k.teoricas;
+                    const faltante = Math.max(k.teoricas - acumulado, 0);
+                    return (
+                      <div key={i} style={{ borderTop: `1px solid ${C.line}`, padding: "8px 0" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+                          <span>{fFecha(e.fecha)} — <b>{fmt(e.cantidad)} u.</b></span>
+                          <Chip tipo={esParcial ? "warn" : "ok"}>{esParcial ? "PARCIAL" : "TOTAL"}</Chip>
+                        </div>
+                        <div style={{ fontSize: 12, color: C.sub, marginTop: 3 }}>
+                          Pedido: {fmt(k.teoricas)} u. · Enviado hasta ahora: {fmt(acumulado)} u. · Falta: <b style={{ color: faltante > 0 ? C.bad : C.ok }}>{fmt(faltante)} u.</b>
+                        </div>
+                      </div>
+                    );
+                  });
+                })()
+              )}
+            </Card>
+          ))}
+        </>
       )}
 
       {tab === "saldo" && (
