@@ -109,8 +109,26 @@ function firmas(doc, izq, der) {
 export function pdfOrden(p) {
   const doc = new jsPDF();
   cabecera(doc, "ORDEN DE PEDIDO DE CONFECCIÓN", "Documento de control y producción textil", AZUL);
-  let y = cajas(
-    doc, 36,
+  let y = 33;
+  if (p.esParcial !== undefined) {
+    const color = p.esParcial ? [196, 90, 40] : VERDE;
+    doc.setFillColor(...color);
+    doc.rect(14, y, 182, 12, "F");
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(14);
+    doc.setFont(undefined, "bold");
+    doc.text(p.esParcial ? "ENTREGA PARCIAL" : "ENTREGA TOTAL", 18, y + 8.5);
+    doc.setFontSize(11);
+    doc.text("Orden N° " + p.numero, 192, y + 8.5, { align: "right" });
+    y += 16;
+    doc.setFontSize(9.5);
+    doc.setTextColor(40, 42, 48);
+    doc.setFont(undefined, "normal");
+    doc.text(`Cantidad total de la orden: ${p.cantidadOriginal} u.   ·   Entregado ahora: ${p.cantidadEntregada} u.   ·   Falta entregar: ${p.faltanteOrden} u.`, 14, y);
+    y += 6;
+  }
+  y = cajas(
+    doc, y,
     {
       titulo: "Datos del Fabricante / Cliente",
       lineas: [["Empresa", p.fabricante || "Mi fábrica"], ["Fecha de emisión", p.fecha], ["Fecha de entrega pactada", p.fechaEntrega || "—"]],

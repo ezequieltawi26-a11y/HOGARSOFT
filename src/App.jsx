@@ -812,6 +812,8 @@ function VistaTaller({ data, guardar, notificar, taller }) {
             taller: nombreTaller(data, o.tallerCosturaId), destino: "costura",
             producto: nombreProducto(data, o.productoId), colores: prod.colores, medida: prod.medida,
             cantidad: fmt(c),
+            esParcial: envC.tipo === "parcial",
+            cantidadOriginal: fmt(k.teoricas), cantidadEntregada: fmt(k.cortadas + c), faltanteOrden: fmt(Math.max(k.teoricas - (k.cortadas + c), 0)),
             coloresSpec: (specColores || []).filter((c) => c.color.trim()).length ? specColores.filter((c) => c.color.trim()) : o.coloresSpec,
             medidasSpec: (specMedidas || []).filter((m) => m.nombre.trim()).length ? specMedidas.filter((m) => m.nombre.trim()) : o.medidasSpec,
             insumos: [["Tela cortada (cortes listos para armar)", fmt(c) + " prendas", "Entregados por el taller de corte " + taller.nombre]],
@@ -2199,6 +2201,9 @@ function DetalleOrden({ data, guardar, ordenId, volver, notificar }) {
       taller: nombreTaller(data, o.tallerCosturaId), destino: "costura",
       producto: nombreProducto(data, o.productoId), colores: prod.colores, medida: prod.medida,
       cantidad: fmt(c),
+      esParcial: c < k.enCorte,
+      cantidadOriginal: fmt(k.teoricas), cantidadEntregada: fmt(k.cortadas + c), faltanteOrden: fmt(Math.max(k.teoricas - (k.cortadas + c), 0)),
+      coloresSpec: o.coloresSpec, medidasSpec: o.medidasSpec,
       insumos: [["Tela cortada (cortes listos para armar)", fmt(c) + " prendas", "Entregados por el taller de corte " + nombreTaller(data, o.tallerCorteId)]],
       observaciones: o.observaciones,
     });
