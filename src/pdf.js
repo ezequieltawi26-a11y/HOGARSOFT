@@ -255,6 +255,9 @@ export async function enviarPDF(doc, nombre, taller, texto) {
         body: JSON.stringify({ to: num, message: texto, filename: nombre, base64Pdf }),
       });
       if (resp.ok) return "enviado-automatico";
+      const err = await resp.json().catch(() => ({}));
+      console.error("Error enviando WhatsApp (Twilio):", err);
+      alert("No se pudo enviar el WhatsApp automático.\nMotivo: " + (err.detalle?.message || err.error || ("Error " + resp.status)));
     } catch (e) {
       // Si falla (Twilio no configurado, sin internet, etc.) sigue con el modo manual de abajo
     }
