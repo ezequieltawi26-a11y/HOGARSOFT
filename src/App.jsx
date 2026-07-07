@@ -1164,6 +1164,7 @@ function EnvioAdmin({ data, guardar, notificar }) {
           taller: nombreTaller(data, ordenRef.tallerCosturaId), destino: "costura",
           producto: nombreProducto(data, f.productoId), colores: prod.colores, medida: prod.medida,
           cantidad: fmt(c),
+          coloresSpec: ordenRef.coloresSpec, medidasSpec: ordenRef.medidasSpec,
           insumos: [["Tela cortada (cortes listos para armar)", fmt(c) + " prendas", "Entregados por el taller de corte " + nombreTaller(data, ordenRef.tallerCorteId)]],
           observaciones: ordenRef.observaciones,
         });
@@ -1990,6 +1991,7 @@ function Ordenes({ data, guardar, abrir, notificar }) {
       taller: nombreTaller(data, f.tallerCorteId), destino: "corte",
       producto: nombreProducto(data, f.productoId), colores: p.colores, medida: p.medida,
       cantidad: fmt(orden.prendasTeoricas),
+      coloresSpec: orden.coloresSpec, medidasSpec: orden.medidasSpec,
       insumos: [["Tela para corte", fmt(f.metrosEnviados) + " metros", `Consumo: ${fmt(p.consumoTela)} m/prenda`]],
       observaciones: f.observaciones,
     });

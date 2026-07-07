@@ -121,11 +121,22 @@ export function pdfOrden(p) {
     },
     AZUL
   );
-  y = seccion(doc, y, "Detalle de modelos y cantidades", AZUL);
+  y = seccion(doc, y, "Detalle del modelo", AZUL);
   y = tabla(doc, y,
     ["Modelo / Artículo", "Colores", "Medidas", "Total Unidades"],
     [[p.producto, p.colores || "—", p.medida || "—", String(p.cantidad) + " u."]]
   );
+  if (p.coloresSpec && p.coloresSpec.length > 0) {
+    y = seccion(doc, y, "Desglose de colores y cantidades", AZUL);
+    const filas = p.coloresSpec.map((c) => [c.color, String(c.cantidad) + " u."]);
+    const total = p.coloresSpec.reduce((s, c) => s + (Number(c.cantidad) || 0), 0);
+    filas.push(["TOTAL", total + " u."]);
+    y = tabla(doc, y, ["Color", "Cantidad"], filas, { 1: { halign: "right", cellWidth: 40 } });
+  }
+  if (p.medidasSpec && p.medidasSpec.length > 0) {
+    y = seccion(doc, y, "Medidas por pieza", AZUL);
+    y = tabla(doc, y, ["Pieza", "Medida"], p.medidasSpec.map((m) => [m.nombre, m.medida]));
+  }
   y = seccion(doc, y, "Insumos y materiales entregados al taller", AZUL);
   y = tabla(doc, y, ["Material / Insumo", "Cantidad Entregada", "Detalle / Notas"], p.insumos);
   y = seccion(doc, y, "Especificaciones técnicas y observaciones", AZUL);
