@@ -1,3 +1,6 @@
+const { getStore } = require("@netlify/blobs");
+const crypto = require("crypto");
+
 exports.handler = async (event) => {
   if (event.httpMethod !== "POST") {
     return { statusCode: 405, body: JSON.stringify({ error: "Método no permitido" }) };
@@ -11,29 +14,25 @@ exports.handler = async (event) => {
 
     const SID = process.env.TWILIO_ACCOUNT_SID;
     const TOKEN = process.env.TWILIO_AUTH_TOKEN;
-    const FROM = process.env.TWILIO_WHATSAPP_FROM; // ej: whatsapp:+14155238886
+    const FROM = process.env.TWILIO_WHATSAPP_FROM;
+    const SITE_ID = process.env.SITE_ID || process.env.NETLIFY_SITE_ID;
+    const NETLIFY_TOKEN = process.env.NETLIFY_AUTH_TOKEN;
 
     if (!SID || !TOKEN || !FROM) {
-      return {
-        statusCode: 500,
-        body: JSON.stringify({ error: "Twilio no está configurado todavía (faltan variables de entorno)." }),
-      };
+      return { statusCode: 500, body: JSON.stringify({ error: "Twilio no está configurado todavía (faltan variables de entorno)." }) };
+    }
+    if (!SITE_ID || !NETLIFY_TOKEN) {
+      return { statusCode: 500, body: JSON.stringify({ error: "Falta configurar NETLIFY_AUTH_TOKEN (ver instrucciones)." }) };
     }
 
-    // 1) Subir el PDF a un hosting temporal público para que Twilio lo pueda descargar
+    // 1) Guardar el PDF en Netlify Blobs para que Twilio lo pueda descargar
+    const store = getStore({ name: "pdfs-whatsapp", siteID: SITE_ID, token: NETLIFY_TOKEN });
+    const id = crypto.randomBytes(8).toString("hex");
     const buffer = Buffer.from(base64Pdf, "base64");
-    const form = new FormData();
-    form.append("file", new Blob([buffer], { type: "application/pdf" }), filename || "orden.pdf");
+    await store.set(id, buffer);
 
-    const uploadResp = await fetch("https://0x0.st", {
-      method: "POST",
-      headers: { "User-Agent": "control-textil-app/1.0" },
-      body: form,
-    });
-    const pdfUrl = (await uploadResp.text()).trim();
-    if (!uploadResp.ok || !pdfUrl.startsWith("http")) {
-      return { statusCode: 502, body: JSON.stringify({ error: "No se pudo subir el PDF para enviarlo.", detalle: pdfUrl }) };
-    }
+    const baseUrl = process.env.URL || process.env.DEPLOY_PRIME_URL || "";
+    const pdfUrl = `${baseUrl}/.netlify/functions/get-pdf?id=${id}`;
 
     // 2) Armar el número y el mensaje
     const numeroDestino = String(to).replace(/\D/g, "");
@@ -60,7 +59,7 @@ exports.handler = async (event) => {
       return { statusCode: 502, body: JSON.stringify({ error: data.message || "Error de Twilio", detalle: data }) };
     }
 
-    return { statusCode: 200, body: JSON.stringify({ ok: true, sid: data.sid, pdfUrl }) };
+    return { statusCode: 200, body: JSON.stringify({ ok: true, sid: data.sid }) };
   } catch (e) {
     return { statusCode: 500, body: JSON.stringify({ error: e.message }) };
   }
