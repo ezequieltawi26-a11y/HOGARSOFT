@@ -559,6 +559,8 @@ function VistaTaller({ data, guardar, notificar, taller }) {
   const [tab, setTab] = useState("aceptar");
   const [rapido, setRapido] = useState({ productoId: "", cantidad: "", fecha: hoy() });
   const [envC, setEnvC] = useState({ ordenId: "", cantidad: "", tipo: "parcial", fecha: hoy() });
+  const [specColores, setSpecColores] = useState([{ color: "", cantidad: "" }]);
+  const [specMedidas, setSpecMedidas] = useState([{ nombre: "", medida: "" }]);
 
   const todas = data.ordenes
     .map((o) => ({ o, k: calcOrden(o) }))
@@ -782,6 +784,13 @@ function VistaTaller({ data, guardar, notificar, taller }) {
       {tab === "enviar" && esCorte && (() => {
         const partidas = activas.filter(({ o, k }) => !o.corteCerrado && k.enCorte > 0 && o.cierreCortePropuesto?.estado !== "pendiente");
         const item = partidas.find(({ o }) => o.id === envC.ordenId);
+        const guardarEspec = () => {
+          if (!item) return notificar("Elegí la partida primero.");
+          actualizarOrden(item.o,
+            { coloresSpec: (specColores || []).filter((c) => c.color.trim()), medidasSpec: (specMedidas || []).filter((m) => m.nombre.trim()) },
+            "El taller de corte actualizó el desglose de colores y medidas.",
+            "Especificación guardada.");
+        };
         const enviarPartida = () => {
           if (!item) return notificar("Elegí la partida.");
           const { o, k } = item;
@@ -803,9 +812,12 @@ function VistaTaller({ data, guardar, notificar, taller }) {
             taller: nombreTaller(data, o.tallerCosturaId), destino: "costura",
             producto: nombreProducto(data, o.productoId), colores: prod.colores, medida: prod.medida,
             cantidad: fmt(c),
+            coloresSpec: (specColores || []).filter((c) => c.color.trim()).length ? specColores.filter((c) => c.color.trim()) : o.coloresSpec,
+            medidasSpec: (specMedidas || []).filter((m) => m.nombre.trim()).length ? specMedidas.filter((m) => m.nombre.trim()) : o.medidasSpec,
             insumos: [["Tela cortada (cortes listos para armar)", fmt(c) + " prendas", "Entregados por el taller de corte " + taller.nombre]],
             observaciones: o.observaciones,
           });
+          if ((specColores || []).some((c) => c.color.trim()) || (specMedidas || []).some((m) => m.nombre.trim())) guardarEspec();
           enviarPDF(pdfCostura, `orden-confeccion-${o.numero}.pdf`, data.talleres.find((t) => t.id === o.tallerCosturaId), `Orden #${o.numero}: cortes entregados (${fmt(c)} prendas). Orden de confección adjunta.`);
           setEnvC({ ordenId: "", cantidad: "", tipo: "parcial", fecha: hoy() });
         };
@@ -835,6 +847,35 @@ function VistaTaller({ data, guardar, notificar, taller }) {
                   <Campo label="Fecha"><input type="date" value={envC.fecha} onChange={(e) => setEnvC({ ...envC, fecha: e.target.value })} /></Campo>
                   <BotonP onClick={enviarPartida}>Enviar</BotonP>
                 </div>
+
+                {item && (
+                  <div style={{ marginTop: 14, background: "#FAF9F5", border: `1px solid ${C.line}`, borderRadius: 8, padding: 12 }}>
+                    <b style={{ fontSize: 13 }}>Desglose de colores y cantidades (no toca el stock)</b>
+                    {specColores.map((c, i) => (
+                      <div key={i} style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                        <input placeholder="Color" value={c.color} onChange={(e) => { const a = [...specColores]; a[i] = { ...a[i], color: e.target.value }; setSpecColores(a); }} />
+                        <input placeholder="Cantidad" type="number" style={{ maxWidth: 120 }} value={c.cantidad} onChange={(e) => { const a = [...specColores]; a[i] = { ...a[i], cantidad: e.target.value }; setSpecColores(a); }} />
+                        <BotonS onClick={() => setSpecColores(specColores.filter((_, j) => j !== i))}>✕</BotonS>
+                      </div>
+                    ))}
+                    <BotonS style={{ marginTop: 8 }} onClick={() => setSpecColores([...specColores, { color: "", cantidad: "" }])}>+ Agregar color</BotonS>
+
+                    <div style={{ marginTop: 14 }}>
+                      <b style={{ fontSize: 13 }}>Medidas de cada prenda</b>
+                      {specMedidas.map((m, i) => (
+                        <div key={i} style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                          <input placeholder="Pieza (ej: Sábana ajustable)" value={m.nombre} onChange={(e) => { const a = [...specMedidas]; a[i] = { ...a[i], nombre: e.target.value }; setSpecMedidas(a); }} />
+                          <input placeholder="Medida (ej: 200cm)" style={{ maxWidth: 160 }} value={m.medida} onChange={(e) => { const a = [...specMedidas]; a[i] = { ...a[i], medida: e.target.value }; setSpecMedidas(a); }} />
+                          <BotonS onClick={() => setSpecMedidas(specMedidas.filter((_, j) => j !== i))}>✕</BotonS>
+                        </div>
+                      ))}
+                      <BotonS style={{ marginTop: 8 }} onClick={() => setSpecMedidas([...specMedidas, { nombre: "", medida: "" }])}>+ Agregar medida</BotonS>
+                    </div>
+                    <div style={{ marginTop: 10 }}>
+                      <BotonS onClick={guardarEspec}>Guardar especificación</BotonS>
+                    </div>
+                  </div>
+                )}
                 {item && Number(envC.cantidad) > 0 && (() => {
                   const c = Number(envC.cantidad);
                   const metros = Number(item.o.metrosEnviados);
