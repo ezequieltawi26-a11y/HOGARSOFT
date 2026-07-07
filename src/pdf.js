@@ -242,7 +242,25 @@ export function pdfPago(p) {
 
 /* ============ Enviar el PDF por WhatsApp ============ */
 export async function enviarPDF(doc, nombre, taller, texto) {
+  const num = String(taller?.whatsapp || "").replace(/\D/g, "");
   const blob = doc.output("blob");
+
+  // 1) Intentar enviar solo, sin que nadie toque nada (Twilio)
+  if (num) {
+    try {
+      const base64Pdf = doc.output("datauristring").split(",")[1];
+      const resp = await fetch("/.netlify/functions/send-whatsapp-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ to: num, message: texto, filename: nombre, base64Pdf }),
+      });
+      if (resp.ok) return "enviado-automatico";
+    } catch (e) {
+      // Si falla (Twilio no configurado, sin internet, etc.) sigue con el modo manual de abajo
+    }
+  }
+
+  // 2) Modo manual de respaldo (por si Twilio todavía no está configurado)
   const file = new File([blob], nombre, { type: "application/pdf" });
   // En celulares: abre la hoja de compartir con el PDF adjunto → elegís WhatsApp → enviar
   if (navigator.canShare && navigator.canShare({ files: [file] })) {
@@ -258,7 +276,6 @@ export async function enviarPDF(doc, nombre, taller, texto) {
   a.href = URL.createObjectURL(blob);
   a.download = nombre;
   a.click();
-  const num = String(taller?.whatsapp || "").replace(/\D/g, "");
   if (num) window.open(`https://wa.me/${num}?text=${encodeURIComponent(texto + "\n\n(El PDF se descargó: adjuntalo al chat)")}`, "_blank");
   return "descargado";
 }
