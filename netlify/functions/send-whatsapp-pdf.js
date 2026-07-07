@@ -1,6 +1,3 @@
-const { getStore } = require("@netlify/blobs");
-const crypto = require("crypto");
-
 exports.handler = async (event) => {
   if (event.httpMethod !== "POST") {
     return { statusCode: 405, body: JSON.stringify({ error: "Método no permitido" }) };
@@ -23,14 +20,20 @@ exports.handler = async (event) => {
       };
     }
 
-    // 1) Guardar el PDF temporalmente para que Twilio lo pueda descargar por URL pública
-    const store = getStore("pdfs-whatsapp");
-    const id = crypto.randomBytes(8).toString("hex");
+    // 1) Subir el PDF a un hosting temporal público para que Twilio lo pueda descargar
     const buffer = Buffer.from(base64Pdf, "base64");
-    await store.set(id, buffer);
+    const form = new FormData();
+    form.append("file", new Blob([buffer], { type: "application/pdf" }), filename || "orden.pdf");
 
-    const baseUrl = process.env.URL || process.env.DEPLOY_PRIME_URL || "";
-    const pdfUrl = `${baseUrl}/.netlify/functions/get-pdf?id=${id}`;
+    const uploadResp = await fetch("https://tmpfiles.org/api/v1/upload", {
+      method: "POST",
+      body: form,
+    });
+    const uploadData = await uploadResp.json();
+    if (!uploadResp.ok || uploadData?.status !== "success" || !uploadData?.data?.url) {
+      return { statusCode: 502, body: JSON.stringify({ error: "No se pudo subir el PDF para enviarlo.", detalle: uploadData }) };
+    }
+    const pdfUrl = uploadData.data.url.replace("tmpfiles.org/", "tmpfiles.org/dl/");
 
     // 2) Armar el número y el mensaje
     const numeroDestino = String(to).replace(/\D/g, "");
