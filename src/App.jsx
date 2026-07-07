@@ -1962,6 +1962,8 @@ function Ordenes({ data, guardar, abrir, notificar }) {
       fechaCreacion: hoy(), fechaPrometidaCorte: "", fechaPrometidaCostura: "", productoId: p0?.id || "",
       tallerCorteId: "", tallerCosturaId: "", metrosEnviados: "",
       precioCorte: p0?.precioCorte || "", precioCostura: p0?.precioCostura || "", observaciones: "",
+      coloresSpec: [{ color: "", cantidad: "" }],
+      medidasSpec: [{ nombre: "", medida: "" }],
     });
   };
 
@@ -1975,6 +1977,8 @@ function Ordenes({ data, guardar, abrir, notificar }) {
     const numero = (data.ordenes.reduce((m, o) => Math.max(m, o.numero || 0), 0) || 0) + 1;
     const orden = {
       ...f, id: uid(), numero,
+      coloresSpec: (f.coloresSpec || []).filter((c) => c.color.trim()),
+      medidasSpec: (f.medidasSpec || []).filter((m) => m.nombre.trim()),
       consumoUsado: Number(p.consumoTela),
       prendasTeoricas: Math.floor(Number(f.metrosEnviados) / Number(p.consumoTela)),
       entregasCorte: [], recepciones: [], metrosReales: "",
@@ -2031,6 +2035,38 @@ function Ordenes({ data, guardar, abrir, notificar }) {
             <Campo label="Precio corte ($/prenda)"><input type="number" step="0.01" value={f.precioCorte} onChange={(e) => setF({ ...f, precioCorte: e.target.value })} /></Campo>
             <Campo label="Precio costura ($/prenda)"><input type="number" step="0.01" value={f.precioCostura} onChange={(e) => setF({ ...f, precioCostura: e.target.value })} /></Campo>
           </div>
+          <div style={{ marginTop: 14 }}>
+            <b style={{ fontSize: 13 }}>Colores y cantidades (no afecta el stock, es solo especificación)</b>
+            {(f.coloresSpec || []).map((c, i) => (
+              <div key={i} style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                <input placeholder="Color (ej: Blanco)" value={c.color} onChange={(e) => {
+                  const arr = [...f.coloresSpec]; arr[i] = { ...arr[i], color: e.target.value }; setF({ ...f, coloresSpec: arr });
+                }} />
+                <input placeholder="Cantidad" type="number" style={{ maxWidth: 120 }} value={c.cantidad} onChange={(e) => {
+                  const arr = [...f.coloresSpec]; arr[i] = { ...arr[i], cantidad: e.target.value }; setF({ ...f, coloresSpec: arr });
+                }} />
+                <BotonS onClick={() => setF({ ...f, coloresSpec: f.coloresSpec.filter((_, j) => j !== i) })}>✕</BotonS>
+              </div>
+            ))}
+            <BotonS style={{ marginTop: 8 }} onClick={() => setF({ ...f, coloresSpec: [...(f.coloresSpec || []), { color: "", cantidad: "" }] })}>+ Agregar color</BotonS>
+          </div>
+
+          <div style={{ marginTop: 14 }}>
+            <b style={{ fontSize: 13 }}>Medidas por pieza (ej: Sábana plana 250cm, Funda 50x80cm)</b>
+            {(f.medidasSpec || []).map((m, i) => (
+              <div key={i} style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                <input placeholder="Pieza (ej: Sábana ajustable)" value={m.nombre} onChange={(e) => {
+                  const arr = [...f.medidasSpec]; arr[i] = { ...arr[i], nombre: e.target.value }; setF({ ...f, medidasSpec: arr });
+                }} />
+                <input placeholder="Medida (ej: 200cm)" style={{ maxWidth: 160 }} value={m.medida} onChange={(e) => {
+                  const arr = [...f.medidasSpec]; arr[i] = { ...arr[i], medida: e.target.value }; setF({ ...f, medidasSpec: arr });
+                }} />
+                <BotonS onClick={() => setF({ ...f, medidasSpec: f.medidasSpec.filter((_, j) => j !== i) })}>✕</BotonS>
+              </div>
+            ))}
+            <BotonS style={{ marginTop: 8 }} onClick={() => setF({ ...f, medidasSpec: [...(f.medidasSpec || []), { nombre: "", medida: "" }] })}>+ Agregar medida</BotonS>
+          </div>
+
           <div style={{ marginTop: 10 }}>
             <Campo label="Observaciones"><textarea rows={2} value={f.observaciones} onChange={(e) => setF({ ...f, observaciones: e.target.value })} /></Campo>
           </div>
@@ -2291,6 +2327,30 @@ function DetalleOrden({ data, guardar, ordenId, volver, notificar }) {
           <BotonS onClick={guardarEdicion}>Guardar cambios</BotonS>
         </div>
         {o.observaciones && <div style={{ marginTop: 10, color: C.sub }}>Obs.: {o.observaciones}</div>}
+        {((o.coloresSpec && o.coloresSpec.length > 0) || (o.medidasSpec && o.medidasSpec.length > 0)) && (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px,1fr))", gap: 12, marginTop: 14, paddingTop: 12, borderTop: `1px solid ${C.line}` }}>
+            {o.coloresSpec && o.coloresSpec.length > 0 && (
+              <div>
+                <b style={{ fontSize: 13 }}>Colores y cantidades</b>
+                <div style={{ marginTop: 6 }}>
+                  {o.coloresSpec.map((c, i) => (
+                    <div key={i} style={{ fontSize: 13, padding: "3px 0" }}>{c.color}: <b>{fmt(c.cantidad)}</b></div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {o.medidasSpec && o.medidasSpec.length > 0 && (
+              <div>
+                <b style={{ fontSize: 13 }}>Medidas por pieza</b>
+                <div style={{ marginTop: 6 }}>
+                  {o.medidasSpec.map((m, i) => (
+                    <div key={i} style={{ fontSize: 13, padding: "3px 0" }}>{m.nombre}: <b>{m.medida}</b></div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </Bloque>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px,1fr))", gap: 14 }}>
