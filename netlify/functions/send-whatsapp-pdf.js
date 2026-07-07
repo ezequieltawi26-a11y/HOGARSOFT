@@ -25,15 +25,15 @@ exports.handler = async (event) => {
     const form = new FormData();
     form.append("file", new Blob([buffer], { type: "application/pdf" }), filename || "orden.pdf");
 
-    const uploadResp = await fetch("https://tmpfiles.org/api/v1/upload", {
+    const uploadResp = await fetch("https://0x0.st", {
       method: "POST",
+      headers: { "User-Agent": "control-textil-app/1.0" },
       body: form,
     });
-    const uploadData = await uploadResp.json();
-    if (!uploadResp.ok || uploadData?.status !== "success" || !uploadData?.data?.url) {
-      return { statusCode: 502, body: JSON.stringify({ error: "No se pudo subir el PDF para enviarlo.", detalle: uploadData }) };
+    const pdfUrl = (await uploadResp.text()).trim();
+    if (!uploadResp.ok || !pdfUrl.startsWith("http")) {
+      return { statusCode: 502, body: JSON.stringify({ error: "No se pudo subir el PDF para enviarlo.", detalle: pdfUrl }) };
     }
-    const pdfUrl = uploadData.data.url.replace("tmpfiles.org/", "tmpfiles.org/dl/");
 
     // 2) Armar el número y el mensaje
     const numeroDestino = String(to).replace(/\D/g, "");
@@ -60,7 +60,7 @@ exports.handler = async (event) => {
       return { statusCode: 502, body: JSON.stringify({ error: data.message || "Error de Twilio", detalle: data }) };
     }
 
-    return { statusCode: 200, body: JSON.stringify({ ok: true, sid: data.sid }) };
+    return { statusCode: 200, body: JSON.stringify({ ok: true, sid: data.sid, pdfUrl }) };
   } catch (e) {
     return { statusCode: 500, body: JSON.stringify({ error: e.message }) };
   }
