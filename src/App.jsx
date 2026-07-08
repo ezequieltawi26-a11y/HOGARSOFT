@@ -930,7 +930,7 @@ function VistaTaller({ data, guardar, notificar, taller }) {
                     <select value={envC.ordenId} onChange={(e) => setEnvC({ ...envC, ordenId: e.target.value })}>
                       <option value="">Elegir…</option>
                       {partidas.map(({ o, k }) => (
-                        <option key={o.id} value={o.id}>#{o.numero} — {nombreProducto(data, o.productoId)} (pend.: {fmt(k.enCorte)})</option>
+                        <option key={o.id} value={o.id}>#{o.numero} {nombreProducto(data, o.productoId)} · {fmt(k.enCorte)} u.</option>
                       ))}
                     </select>
                   </Campo>
@@ -1046,7 +1046,7 @@ function VistaTaller({ data, guardar, notificar, taller }) {
                     <select value={envCos.ordenId} onChange={(e) => setEnvCos({ ...envCos, ordenId: e.target.value })}>
                       <option value="">Elegir…</option>
                       {partidasCos.map(({ o, k }) => (
-                        <option key={o.id} value={o.id}>#{o.numero} — {nombreProducto(data, o.productoId)} (pend.: {fmt(k.enCostura)})</option>
+                        <option key={o.id} value={o.id}>#{o.numero} {nombreProducto(data, o.productoId)} · {fmt(k.enCostura)} u.</option>
                       ))}
                     </select>
                   </Campo>
