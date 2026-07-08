@@ -266,7 +266,7 @@ function Ingreso({ cfg, data, alEntrar }) {
 
 /* ============================================================ */
 export default function App() {
-  const [cfg, setCfg] = useState(leerConfig);
+  const [cfg, setCfg] = useState(() => ({ url: SUPABASE_URL, key: SUPABASE_KEY, pin: "3469" }));
   const [sesion, setSesionRaw] = useState(() => {
     try { return JSON.parse(localStorage.getItem("textil-sesion") || "null"); } catch { return null; }
   });
@@ -311,7 +311,6 @@ export default function App() {
     setTimeout(() => setAviso(""), 2500);
   };
 
-  if (!cfg) return <Configuracion alListo={(c) => setCfg(c)} />;
   if (!cargado)
     return (
       <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", background: C.bg, color: C.sub, fontFamily: "system-ui" }}>
