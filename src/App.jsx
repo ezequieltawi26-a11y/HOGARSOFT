@@ -286,6 +286,7 @@ export default function App() {
   const [vista, setVista] = useState("panel");
   const [ordenAbierta, setOrdenAbierta] = useState(null);
   const [cargado, setCargado] = useState(false);
+  const [cargaError, setCargaError] = useState(false);
   const [aviso, setAviso] = useState("");
 
   useEffect(() => {
@@ -294,8 +295,10 @@ export default function App() {
       try {
         const v = await nubeCargar(cfg);
         if (v) setData({ ...VACIO, ...v });
+        setCargaError(false);
       } catch (e) {
         setAviso("No se pudieron cargar los datos. Revisá tu conexión.");
+        setCargaError(true);
       }
       setCargado(true);
     })();
@@ -328,7 +331,19 @@ export default function App() {
   /* ---- Vista de taller (acceso limitado) ---- */
   if (sesion.tipo === "taller") {
     const taller = data.talleres.find((t) => t.id === sesion.tallerId);
-    if (!taller) { setSesion(null); return null; }
+    if (!taller) {
+      if (cargaError) {
+        return (
+          <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", background: C.bg, color: C.sub, fontFamily: "system-ui", padding: 20, textAlign: "center" }}>
+            <div>
+              <div style={{ marginBottom: 12 }}>No se pudo conectar. Tu sesión sigue activa.</div>
+              <button onClick={() => window.location.reload()} style={{ background: C.indigo, color: "#fff", padding: "9px 18px", fontWeight: 700, borderRadius: 8, border: "none", cursor: "pointer" }}>Reintentar</button>
+            </div>
+          </div>
+        );
+      }
+      setSesion(null); return null;
+    }
     return (
       <div style={{ minHeight: "100vh", background: C.bg, color: C.ink, fontFamily: "'Segoe UI', system-ui, sans-serif", fontSize: 14 }}>
         <style>{`
