@@ -1099,27 +1099,32 @@ function VistaTaller({ data, guardar, notificar, taller }) {
             if (conDesc.length === 0) return <Vacio>No tenés descuentos. ¡Bien!</Vacio>;
             const totalDesc = conDesc.reduce((a, { o }) => a + calcDesperdicioOrden(data, o).monto, 0);
             return (
-              <div className="tabla" style={{ marginTop: 8 }}>
-                <table>
-                  <thead><tr><th>Partida</th><th>Producto</th><th>Metros entregados</th><th>Metros faltantes</th><th>Faltante más del 4%</th><th>% que faltó</th><th>Monto a descontar</th></tr></thead>
-                  <tbody>
-                    {conDesc.map(({ o }) => {
-                      const d = calcDesperdicioOrden(data, o);
-                      return (
-                        <tr key={o.id}>
-                          <td><b>#{o.numero}</b></td>
-                          <td>{nombreProducto(data, o.productoId)}</td>
-                          <td>{fmt(d.usados)} m</td>
-                          <td style={{ fontWeight: 700 }}>{fmt(d.faltanteTotal)} m</td>
-                          <td style={{ color: C.bad, fontWeight: 700 }}>{fmt(d.metrosExceso)} m</td>
-                          <td style={{ color: C.bad, fontWeight: 700 }}>{fmt(d.pct)} %</td>
-                          <td style={{ color: C.bad, fontWeight: 800 }}>{money(d.monto)}</td>
-                        </tr>
-                      );
-                    })}
-                    <tr style={{ background: "#FAF9F5" }}><td colSpan={6}><b>TOTAL A DESCONTAR</b></td><td style={{ color: C.bad, fontWeight: 800 }}>{money(totalDesc)}</td></tr>
-                  </tbody>
-                </table>
+              <div style={{ marginTop: 10 }}>
+                {conDesc.map(({ o }) => {
+                  const d = calcDesperdicioOrden(data, o);
+                  return (
+                    <div key={o.id} style={{ border: `1px solid ${C.line}`, borderRadius: 10, padding: 12, marginBottom: 10 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                        <b>Partida #{o.numero}</b>
+                        <span style={{ color: C.sub }}>{nombreProducto(data, o.productoId)}</span>
+                      </div>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, fontSize: 13 }}>
+                        <div><div style={{ color: C.sub, fontSize: 11 }}>METROS ENTREGADOS</div><b>{fmt(d.usados)} m</b></div>
+                        <div><div style={{ color: C.sub, fontSize: 11 }}>METROS FALTANTES</div><b>{fmt(d.faltanteTotal)} m</b></div>
+                        <div><div style={{ color: C.sub, fontSize: 11 }}>FALTANTE MÁS DEL 4%</div><b style={{ color: C.bad }}>{fmt(d.metrosExceso)} m</b></div>
+                        <div><div style={{ color: C.sub, fontSize: 11 }}>% QUE FALTÓ</div><b style={{ color: C.bad }}>{fmt(d.pct)} %</b></div>
+                      </div>
+                      <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${C.line}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <span style={{ fontSize: 12, color: C.sub }}>MONTO A DESCONTAR</span>
+                        <b style={{ color: C.bad, fontSize: 17 }}>{money(d.monto)}</b>
+                      </div>
+                    </div>
+                  );
+                })}
+                <div style={{ background: "#FAF9F5", borderRadius: 10, padding: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <b>TOTAL A DESCONTAR</b>
+                  <b style={{ color: C.bad, fontSize: 18 }}>{money(totalDesc)}</b>
+                </div>
               </div>
             );
           })()}
