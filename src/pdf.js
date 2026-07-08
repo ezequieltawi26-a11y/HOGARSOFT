@@ -240,7 +240,38 @@ export function pdfPago(p) {
   return doc;
 }
 
-/* ============ Enviar el PDF por WhatsApp ============ */
+export function pdfPedidoCombinado(p) {
+  const doc = new jsPDF();
+  cabecera(doc, "PEDIDO COMBINADO — VARIOS PRODUCTOS", "Documento de control y producción textil", AZUL);
+  let y = cajas(
+    doc, 36,
+    {
+      titulo: "Datos del Fabricante / Cliente",
+      lineas: [["Empresa", p.fabricante || "Mi fábrica"], ["Fecha de emisión", p.fecha], ["Fecha de entrega pactada", p.fechaEntrega || "—"]],
+    },
+    {
+      titulo: "Datos del Taller de Corte",
+      lineas: [["Taller / Responsable", p.taller], ["Pedido combinado N°", "#" + p.grupoNumero], ["Cantidad de productos", String(p.items.length)]],
+    },
+    AZUL
+  );
+  y = seccion(doc, y, "Detalle de productos", AZUL);
+  const filas = p.items.map((it) => [it.producto, it.colores || "—", it.medida || "—", fmt2(it.metros) + " m", String(it.teoricas) + " u."]);
+  const totalMetros = p.items.reduce((s, it) => s + Number(it.metros), 0);
+  const totalUnid = p.items.reduce((s, it) => s + Number(it.teoricas), 0);
+  filas.push(["TOTAL", "", "", fmt2(totalMetros) + " m", String(totalUnid) + " u."]);
+  y = tabla(doc, y, ["Producto", "Colores", "Medidas", "Metros", "Prendas teóricas"], filas);
+  y = seccion(doc, y, "Observaciones", AZUL);
+  parrafo(doc, y, p.observaciones || "Sin observaciones.");
+  firmas(doc, "Firma y aclaración Fabricante", "Firma y conformidad Taller");
+  return doc;
+}
+
+function fmt2(n) {
+  return (Number(n) || 0).toLocaleString("es-AR", { maximumFractionDigits: 2 });
+}
+
+
 export async function enviarPDF(doc, nombre, taller, texto) {
   const num = String(taller?.whatsapp || "").replace(/\D/g, "");
   const blob = doc.output("blob");

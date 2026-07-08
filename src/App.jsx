@@ -392,6 +392,7 @@ export default function App() {
     ["envio", "Enviar"],
     ["stock", "Stock"],
     ["ordenes", "Órdenes"],
+    ["combinados", "Combinados"],
     ["borradores", "Borradores"],
     ["productos", "Productos"],
     ["telas", "Telas"],
@@ -465,6 +466,7 @@ export default function App() {
         {vista === "ordenes" && ordenAbierta && (
           <DetalleOrden data={data} guardar={guardar} ordenId={ordenAbierta} volver={() => setOrdenAbierta(null)} notificar={notificar} />
         )}
+        {vista === "combinados" && <Combinados data={data} abrir={(id) => { setVista("ordenes"); setOrdenAbierta(id); }} />}
         {vista === "borradores" && <Borradores data={data} guardar={guardar} notificar={notificar} />}
         {vista === "confirmar" && <ConfirmarAdmin data={data} guardar={guardar} notificar={notificar} />}
         {vista === "envio" && <EnvioAdmin data={data} guardar={guardar} notificar={notificar} />}
@@ -817,6 +819,9 @@ function VistaTaller({ data, guardar, notificar, taller }) {
           {todas.length === 0 && <Card><Vacio>Todavía no te enviaron ningún pedido.</Vacio></Card>}
           {todas.slice().reverse().map(({ o, k }) => (
             <Card key={o.id} style={{ marginBottom: 14 }}>
+              {o.grupoId && (
+                <div style={{ marginBottom: 8 }}><Chip tipo="warn">Pedido combinado #{o.grupoNumero}</Chip></div>
+              )}
               <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: 6 }}>
                 <b>N° de producción #{o.numero} — {nombreProducto(data, o.productoId)}</b>
                 <Chip tipo={k.color}>{k.estado}</Chip>
@@ -1236,6 +1241,9 @@ function VistaTaller({ data, guardar, notificar, taller }) {
           {todas.length === 0 && <Card><Vacio>Todavía no tenés órdenes.</Vacio></Card>}
           {todas.slice().reverse().map(({ o, k }) => (
             <Card key={o.id} style={{ marginBottom: 14 }}>
+              {o.grupoId && (
+                <div style={{ marginBottom: 8 }}><Chip tipo="warn">Pedido combinado #{o.grupoNumero}</Chip></div>
+              )}
               <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
                 <b>Orden #{o.numero} — {nombreProducto(data, o.productoId)}</b>
                 <Chip tipo={k.color}>{k.estado}</Chip>
@@ -1625,6 +1633,62 @@ function Borradores({ data, guardar, notificar }) {
           </div>
         )}
       </Card>
+    </div>
+  );
+}
+
+/* ============ COMBINADOS (pedidos con varios productos) ============ */
+function Combinados({ data, abrir }) {
+  const grupos = {};
+  data.ordenes.forEach((o) => {
+    if (!o.grupoId) return;
+    if (!grupos[o.grupoId]) grupos[o.grupoId] = { grupoNumero: o.grupoNumero, items: [] };
+    grupos[o.grupoId].items.push(o);
+  });
+  const lista = Object.entries(grupos).sort((a, b) => (b[1].grupoNumero || 0) - (a[1].grupoNumero || 0));
+
+  return (
+    <div>
+      <Titulo>Pedidos combinados</Titulo>
+      <div style={{ fontSize: 12, color: C.sub, marginBottom: 14 }}>
+        Órdenes con varios productos, creadas juntas. Cada producto sigue su propio avance por separado.
+      </div>
+      {lista.length === 0 ? (
+        <Card><Vacio>Todavía no creaste ningún pedido con varios productos.</Vacio></Card>
+      ) : (
+        lista.map(([grupoId, g]) => {
+          const totalUnid = g.items.reduce((s, o) => s + (Number(o.prendasTeoricas) || 0), 0);
+          const primero = g.items[0];
+          return (
+            <Card key={grupoId} style={{ marginBottom: 16 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
+                <b>Pedido combinado #{g.grupoNumero}</b>
+                <span style={{ color: C.sub, fontSize: 13 }}>
+                  {nombreTaller(data, primero.tallerCorteId)} → {nombreTaller(data, primero.tallerCosturaId)} · {fFecha(primero.fechaCreacion)}
+                </span>
+              </div>
+              <div style={{ display: "grid", gap: 10 }}>
+                {g.items.map((o) => {
+                  const k = calcOrden(o);
+                  return (
+                    <div key={o.id} onClick={() => abrir(o.id)} style={{ cursor: "pointer", border: `1px solid ${C.line}`, borderRadius: 10, padding: 12 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
+                        <div><b>#{o.numero}</b> · {nombreProducto(data, o.productoId)} · {fmt(k.teoricas)} prendas</div>
+                        <Chip tipo={k.color}>{k.estado}</Chip>
+                      </div>
+                      <BarraHilo k={k} />
+                    </div>
+                  );
+                })}
+              </div>
+              <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${C.line}`, display: "flex", justifyContent: "space-between" }}>
+                <span style={{ color: C.sub, fontSize: 13 }}>{g.items.length} productos</span>
+                <b>Total: {fmt(totalUnid)} prendas</b>
+              </div>
+            </Card>
+          );
+        })
+      )}
     </div>
   );
 }
@@ -2243,54 +2307,85 @@ function Ordenes({ data, guardar, abrir, notificar }) {
   const [f, setF] = useState(null);
   const [recibo, setRecibo] = useState(null);
   const st = stockTela(data);
-  const prodSel = f ? data.productos.find((p) => p.id === f.productoId) : null;
-  const teoricas = prodSel && f.metrosEnviados ? Math.floor(Number(f.metrosEnviados) / Number(prodSel.consumoTela)) : 0;
-  const stockTelaProd = prodSel && prodSel.telaId ? stockDeTela(data, prodSel.telaId) : 0;
-  const nombreTelaProd = prodSel ? (data.telasCatalogo.find((t) => t.id === prodSel.telaId)?.nombre || "sin tela asignada") : "";
+
+  const filaVacia = () => {
+    const p0 = data.productos.find((p) => p.estado === "Activo") || data.productos[0];
+    return { productoId: p0?.id || "", metrosEnviados: "", precioCorte: p0?.precioCorte || "", precioCostura: p0?.precioCostura || "" };
+  };
 
   const nuevo = () => {
     if (data.productos.length === 0) return notificar("Primero cargá al menos un producto.");
     if (data.talleres.length === 0) return notificar("Primero cargá tus talleres.");
-    const p0 = data.productos[0];
     setF({
-      fechaCreacion: hoy(), fechaPrometidaCorte: "", fechaPrometidaCostura: "", productoId: p0?.id || "",
-      tallerCorteId: "", tallerCosturaId: "", metrosEnviados: "",
-      precioCorte: p0?.precioCorte || "", precioCostura: p0?.precioCostura || "", observaciones: "",
+      fechaCreacion: hoy(), fechaPrometidaCorte: "", fechaPrometidaCostura: "",
+      tallerCorteId: "", tallerCosturaId: "", observaciones: "",
       coloresSpec: [{ color: "", cantidad: "" }],
       medidasSpec: [{ nombre: "", medida: "" }],
+      productos: [filaVacia()],
     });
   };
 
   const salvar = () => {
-    if (!f.productoId || !f.tallerCorteId || !f.tallerCosturaId || !f.metrosEnviados)
-      return notificar("Completá producto, talleres y metros enviados.");
-    const p = data.productos.find((x) => x.id === f.productoId);
-    const dispTela = p.telaId ? stockDeTela(data, p.telaId) : 0;
-    if (Number(f.metrosEnviados) > dispTela)
-      return notificar(`No hay suficiente tela "${data.telasCatalogo.find((t) => t.id === p.telaId)?.nombre || ""}". Disponible: ${fmt(dispTela)} m.`);
-    const numero = (data.ordenes.reduce((m, o) => Math.max(m, o.numero || 0), 0) || 0) + 1;
-    const orden = {
-      ...f, id: uid(), numero,
-      coloresSpec: (f.coloresSpec || []).filter((c) => c.color.trim()),
-      medidasSpec: (f.medidasSpec || []).filter((m) => m.nombre.trim()),
-      consumoUsado: Number(p.consumoTela),
-      prendasTeoricas: Math.floor(Number(f.metrosEnviados) / Number(p.consumoTela)),
-      entregasCorte: [], recepciones: [], metrosReales: "",
-      movimientos: [{ fecha: hoy(), detalle: `Orden creada. ${fmt(f.metrosEnviados)} m enviados a ${nombreTaller(data, f.tallerCorteId)}.` }],
-    };
-    guardar({ ...data, ordenes: [...data.ordenes, orden] });
-    const pdfC = pdfMod.pdfOrden({
-      numero, fecha: fFecha(f.fechaCreacion), fechaEntrega: fFecha(f.fechaPrometidaCorte),
-      taller: nombreTaller(data, f.tallerCorteId), destino: "corte",
-      producto: nombreProducto(data, f.productoId), colores: p.colores, medida: p.medida,
-      cantidad: fmt(orden.prendasTeoricas),
-      coloresSpec: orden.coloresSpec, medidasSpec: orden.medidasSpec,
-      insumos: [["Tela para corte", fmt(f.metrosEnviados) + " metros", `Consumo: ${fmt(p.consumoTela)} m/prenda`]],
-      observaciones: f.observaciones,
+    const filas = (f.productos || []).filter((r) => r.productoId && r.metrosEnviados);
+    if (filas.length === 0 || !f.tallerCorteId || !f.tallerCosturaId)
+      return notificar("Completá al menos un producto con metros, y los dos talleres.");
+    // Validar stock de tela por cada producto
+    for (const r of filas) {
+      const p = data.productos.find((x) => x.id === r.productoId);
+      const dispTela = p.telaId ? stockDeTela(data, p.telaId) : 0;
+      if (Number(r.metrosEnviados) > dispTela)
+        return notificar(`No hay suficiente tela "${data.telasCatalogo.find((t) => t.id === p.telaId)?.nombre || ""}" para "${p.nombre}". Disponible: ${fmt(dispTela)} m.`);
+    }
+    const esMultiple = filas.length > 1;
+    const grupoId = esMultiple ? uid() : null;
+    const grupoNumero = esMultiple ? (data.ordenes.reduce((m, o) => Math.max(m, o.grupoNumero || 0), 0) || 0) + 1 : null;
+    let numeroBase = data.ordenes.reduce((m, o) => Math.max(m, o.numero || 0), 0) || 0;
+    const nuevasOrdenes = [];
+    const itemsPdf = [];
+    filas.forEach((r) => {
+      const p = data.productos.find((x) => x.id === r.productoId);
+      numeroBase += 1;
+      const teoricas = Math.floor(Number(r.metrosEnviados) / Number(p.consumoTela));
+      const orden = {
+        id: uid(), numero: numeroBase, grupoId, grupoNumero,
+        fechaCreacion: f.fechaCreacion, fechaPrometidaCorte: f.fechaPrometidaCorte, fechaPrometidaCostura: f.fechaPrometidaCostura,
+        tallerCorteId: f.tallerCorteId, tallerCosturaId: f.tallerCosturaId, observaciones: f.observaciones,
+        productoId: r.productoId, metrosEnviados: r.metrosEnviados, precioCorte: r.precioCorte, precioCostura: r.precioCostura,
+        coloresSpec: esMultiple ? [] : (f.coloresSpec || []).filter((c) => c.color.trim()),
+        medidasSpec: esMultiple ? [] : (f.medidasSpec || []).filter((m) => m.nombre.trim()),
+        consumoUsado: Number(p.consumoTela),
+        prendasTeoricas: teoricas,
+        entregasCorte: [], recepciones: [], metrosReales: "",
+        movimientos: [{ fecha: hoy(), detalle: `Orden creada${esMultiple ? " (pedido combinado #" + grupoNumero + ")" : ""}. ${fmt(r.metrosEnviados)} m enviados a ${nombreTaller(data, f.tallerCorteId)}.` }],
+      };
+      nuevasOrdenes.push(orden);
+      itemsPdf.push({ producto: p.nombre, colores: p.colores, medida: p.medida, metros: r.metrosEnviados, teoricas });
     });
-    pdfMod.enviarPDF(pdfC, `orden-${numero}.pdf`, data.talleres.find((t) => t.id === f.tallerCorteId), `Orden #${numero} — ${nombreProducto(data, f.productoId)}. Orden de pedido adjunta.`);
+    guardar({ ...data, ordenes: [...data.ordenes, ...nuevasOrdenes] });
+
+    if (esMultiple) {
+      const pdfC = pdfMod.pdfPedidoCombinado({
+        grupoNumero, fecha: fFecha(f.fechaCreacion), fechaEntrega: fFecha(f.fechaPrometidaCorte),
+        taller: nombreTaller(data, f.tallerCorteId), items: itemsPdf, observaciones: f.observaciones,
+      });
+      pdfMod.enviarPDF(pdfC, `pedido-combinado-${grupoNumero}.pdf`, data.talleres.find((t) => t.id === f.tallerCorteId), `Pedido combinado #${grupoNumero} — ${itemsPdf.length} productos. Orden de pedido adjunta.`);
+      notificar(`Pedido combinado #${grupoNumero} creado con ${filas.length} productos.`);
+    } else {
+      const p = data.productos.find((x) => x.id === filas[0].productoId);
+      const orden = nuevasOrdenes[0];
+      const pdfC = pdfMod.pdfOrden({
+        numero: orden.numero, fecha: fFecha(f.fechaCreacion), fechaEntrega: fFecha(f.fechaPrometidaCorte),
+        taller: nombreTaller(data, f.tallerCorteId), destino: "corte",
+        producto: p.nombre, colores: p.colores, medida: p.medida,
+        cantidad: fmt(orden.prendasTeoricas),
+        coloresSpec: orden.coloresSpec, medidasSpec: orden.medidasSpec,
+        insumos: [["Tela para corte", fmt(orden.metrosEnviados) + " metros", `Consumo: ${fmt(p.consumoTela)} m/prenda`]],
+        observaciones: f.observaciones,
+      });
+      pdfMod.enviarPDF(pdfC, `orden-${orden.numero}.pdf`, data.talleres.find((t) => t.id === f.tallerCorteId), `Orden #${orden.numero} — ${p.nombre}. Orden de pedido adjunta.`);
+      notificar(`Orden #${orden.numero} creada. Deberían salir ${fmt(orden.prendasTeoricas)} prendas.`);
+    }
     setF(null);
-    notificar(`Orden #${numero} creada. Deberían salir ${fmt(orden.prendasTeoricas)} prendas.`);
   };
 
   return (
@@ -2300,15 +2395,53 @@ function Ordenes({ data, guardar, abrir, notificar }) {
       {f && (
         <Card style={{ marginBottom: 16, borderLeft: `4px solid ${C.indigo}` }}>
           <b>Nueva orden — envío de tela al taller de corte</b>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(190px,1fr))", gap: 10, marginTop: 12 }}>
-            <Campo label="Producto *">
-              <select value={f.productoId} onChange={(e) => {
-                const p = data.productos.find((x) => x.id === e.target.value);
-                setF({ ...f, productoId: e.target.value, precioCorte: p?.precioCorte || "", precioCostura: p?.precioCostura || "" });
-              }}>
-                {data.productos.filter((p) => p.estado === "Activo").map((p) => <option key={p.id} value={p.id}>{p.codigo} — {p.nombre}</option>)}
-              </select>
-            </Campo>
+          <div style={{ marginTop: 12 }}>
+            <b style={{ fontSize: 13 }}>Productos</b>
+            {(f.productos || []).map((r, i) => {
+              const p = data.productos.find((x) => x.id === r.productoId);
+              const dispT = p && p.telaId ? stockDeTela(data, p.telaId) : 0;
+              const teoricasFila = p && r.metrosEnviados ? Math.floor(Number(r.metrosEnviados) / Number(p.consumoTela)) : 0;
+              return (
+                <div key={i} style={{ background: "#FAF9F5", border: `1px solid ${C.line}`, borderRadius: 8, padding: 10, marginTop: 8 }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px,1fr))", gap: 8, alignItems: "end" }}>
+                    <Campo label={`Producto ${i + 1}`}>
+                      <select value={r.productoId} onChange={(e) => {
+                        const np = data.productos.find((x) => x.id === e.target.value);
+                        const arr = [...f.productos];
+                        arr[i] = { ...arr[i], productoId: e.target.value, precioCorte: np?.precioCorte || "", precioCostura: np?.precioCostura || "" };
+                        setF({ ...f, productos: arr });
+                      }}>
+                        {data.productos.filter((x) => x.estado === "Activo").map((x) => <option key={x.id} value={x.id}>{x.codigo} — {x.nombre}</option>)}
+                      </select>
+                    </Campo>
+                    <Campo label={`Metros (disp.: ${fmt(dispT)} m)`}>
+                      <input type="number" step="0.01" value={r.metrosEnviados} onChange={(e) => {
+                        const arr = [...f.productos]; arr[i] = { ...arr[i], metrosEnviados: e.target.value }; setF({ ...f, productos: arr });
+                      }} />
+                    </Campo>
+                    <Campo label="Precio corte"><input type="number" step="0.01" value={r.precioCorte} onChange={(e) => {
+                      const arr = [...f.productos]; arr[i] = { ...arr[i], precioCorte: e.target.value }; setF({ ...f, productos: arr });
+                    }} /></Campo>
+                    <Campo label="Precio costura"><input type="number" step="0.01" value={r.precioCostura} onChange={(e) => {
+                      const arr = [...f.productos]; arr[i] = { ...arr[i], precioCostura: e.target.value }; setF({ ...f, productos: arr });
+                    }} /></Campo>
+                    {f.productos.length > 1 && (
+                      <BotonBorrar onConfirm={() => setF({ ...f, productos: f.productos.filter((_, j) => j !== i) })} />
+                    )}
+                  </div>
+                  {p && r.metrosEnviados > 0 && (
+                    <div style={{ marginTop: 8, fontSize: 12.5, color: C.ok }}>→ Deberían salir <b>{fmt(teoricasFila)} prendas</b> de {p.nombre}.</div>
+                  )}
+                </div>
+              );
+            })}
+            <BotonS style={{ marginTop: 10 }} onClick={() => setF({ ...f, productos: [...(f.productos || []), filaVacia()] })}>+ Agregar otro producto</BotonS>
+            {f.productos && f.productos.length > 3 && (
+              <div style={{ marginTop: 8, fontSize: 12, color: C.sub }}>Con más de 3 productos, esta orden va a quedar agrupada como «Pedido combinado» y se va a ver clara en la pestaña «Combinados».</div>
+            )}
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(190px,1fr))", gap: 10, marginTop: 14 }}>
             <Campo label="Taller de corte *">
               <select value={f.tallerCorteId} onChange={(e) => setF({ ...f, tallerCorteId: e.target.value })}>
                 <option value="">Elegir…</option>
@@ -2321,55 +2454,50 @@ function Ordenes({ data, guardar, abrir, notificar }) {
                 {data.talleres.filter((t) => t.tipo === "costura").map((t) => <option key={t.id} value={t.id}>{t.nombre}</option>)}
               </select>
             </Campo>
-            <Campo label={`Metros enviados * (${nombreTelaProd}, disp.: ${fmt(stockTelaProd)} m, ${money(precioTelaDeProducto(data, f.productoId))}/m)`}>
-              <input type="number" step="0.01" value={f.metrosEnviados} onChange={(e) => setF({ ...f, metrosEnviados: e.target.value })} />
-            </Campo>
             <Campo label="Fecha de envío"><input type="date" value={f.fechaCreacion} onChange={(e) => setF({ ...f, fechaCreacion: e.target.value })} /></Campo>
             <Campo label="Entrega taller de corte"><input type="date" value={f.fechaPrometidaCorte} onChange={(e) => setF({ ...f, fechaPrometidaCorte: e.target.value })} /></Campo>
             <Campo label="Entrega taller de costura"><input type="date" value={f.fechaPrometidaCostura} onChange={(e) => setF({ ...f, fechaPrometidaCostura: e.target.value })} /></Campo>
-            <Campo label="Precio corte ($/prenda)"><input type="number" step="0.01" value={f.precioCorte} onChange={(e) => setF({ ...f, precioCorte: e.target.value })} /></Campo>
-            <Campo label="Precio costura ($/prenda)"><input type="number" step="0.01" value={f.precioCostura} onChange={(e) => setF({ ...f, precioCostura: e.target.value })} /></Campo>
-          </div>
-          <div style={{ marginTop: 14 }}>
-            <b style={{ fontSize: 13 }}>Colores y cantidades (no afecta el stock, es solo especificación)</b>
-            {(f.coloresSpec || []).map((c, i) => (
-              <div key={i} style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                <input placeholder="Color (ej: Blanco)" value={c.color} onChange={(e) => {
-                  const arr = [...f.coloresSpec]; arr[i] = { ...arr[i], color: e.target.value }; setF({ ...f, coloresSpec: arr });
-                }} />
-                <input placeholder="Cantidad" type="number" style={{ maxWidth: 120 }} value={c.cantidad} onChange={(e) => {
-                  const arr = [...f.coloresSpec]; arr[i] = { ...arr[i], cantidad: e.target.value }; setF({ ...f, coloresSpec: arr });
-                }} />
-                <BotonS onClick={() => setF({ ...f, coloresSpec: f.coloresSpec.filter((_, j) => j !== i) })}>✕</BotonS>
-              </div>
-            ))}
-            <BotonS style={{ marginTop: 8 }} onClick={() => setF({ ...f, coloresSpec: [...(f.coloresSpec || []), { color: "", cantidad: "" }] })}>+ Agregar color</BotonS>
           </div>
 
-          <div style={{ marginTop: 14 }}>
-            <b style={{ fontSize: 13 }}>Medidas por pieza (ej: Sábana plana 250cm, Funda 50x80cm)</b>
-            {(f.medidasSpec || []).map((m, i) => (
-              <div key={i} style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                <input placeholder="Pieza (ej: Sábana ajustable)" value={m.nombre} onChange={(e) => {
-                  const arr = [...f.medidasSpec]; arr[i] = { ...arr[i], nombre: e.target.value }; setF({ ...f, medidasSpec: arr });
-                }} />
-                <input placeholder="Medida (ej: 200cm)" style={{ maxWidth: 160 }} value={m.medida} onChange={(e) => {
-                  const arr = [...f.medidasSpec]; arr[i] = { ...arr[i], medida: e.target.value }; setF({ ...f, medidasSpec: arr });
-                }} />
-                <BotonS onClick={() => setF({ ...f, medidasSpec: f.medidasSpec.filter((_, j) => j !== i) })}>✕</BotonS>
+          {(!f.productos || f.productos.length <= 1) && (
+            <>
+              <div style={{ marginTop: 14 }}>
+                <b style={{ fontSize: 13 }}>Colores y cantidades (no afecta el stock, es solo especificación)</b>
+                {(f.coloresSpec || []).map((c, i) => (
+                  <div key={i} style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                    <input placeholder="Color (ej: Blanco)" value={c.color} onChange={(e) => {
+                      const arr = [...f.coloresSpec]; arr[i] = { ...arr[i], color: e.target.value }; setF({ ...f, coloresSpec: arr });
+                    }} />
+                    <input placeholder="Cantidad" type="number" style={{ maxWidth: 120 }} value={c.cantidad} onChange={(e) => {
+                      const arr = [...f.coloresSpec]; arr[i] = { ...arr[i], cantidad: e.target.value }; setF({ ...f, coloresSpec: arr });
+                    }} />
+                    <BotonS onClick={() => setF({ ...f, coloresSpec: f.coloresSpec.filter((_, j) => j !== i) })}>✕</BotonS>
+                  </div>
+                ))}
+                <BotonS style={{ marginTop: 8 }} onClick={() => setF({ ...f, coloresSpec: [...(f.coloresSpec || []), { color: "", cantidad: "" }] })}>+ Agregar color</BotonS>
               </div>
-            ))}
-            <BotonS style={{ marginTop: 8 }} onClick={() => setF({ ...f, medidasSpec: [...(f.medidasSpec || []), { nombre: "", medida: "" }] })}>+ Agregar medida</BotonS>
-          </div>
+
+              <div style={{ marginTop: 14 }}>
+                <b style={{ fontSize: 13 }}>Medidas por pieza (ej: Sábana plana 250cm, Funda 50x80cm)</b>
+                {(f.medidasSpec || []).map((m, i) => (
+                  <div key={i} style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                    <input placeholder="Pieza (ej: Sábana ajustable)" value={m.nombre} onChange={(e) => {
+                      const arr = [...f.medidasSpec]; arr[i] = { ...arr[i], nombre: e.target.value }; setF({ ...f, medidasSpec: arr });
+                    }} />
+                    <input placeholder="Medida (ej: 200cm)" style={{ maxWidth: 160 }} value={m.medida} onChange={(e) => {
+                      const arr = [...f.medidasSpec]; arr[i] = { ...arr[i], medida: e.target.value }; setF({ ...f, medidasSpec: arr });
+                    }} />
+                    <BotonS onClick={() => setF({ ...f, medidasSpec: f.medidasSpec.filter((_, j) => j !== i) })}>✕</BotonS>
+                  </div>
+                ))}
+                <BotonS style={{ marginTop: 8 }} onClick={() => setF({ ...f, medidasSpec: [...(f.medidasSpec || []), { nombre: "", medida: "" }] })}>+ Agregar medida</BotonS>
+              </div>
+            </>
+          )}
 
           <div style={{ marginTop: 10 }}>
             <Campo label="Observaciones"><textarea rows={2} value={f.observaciones} onChange={(e) => setF({ ...f, observaciones: e.target.value })} /></Campo>
           </div>
-          {prodSel && f.metrosEnviados > 0 && (
-            <div style={{ marginTop: 10, background: C.okBg, color: C.ok, borderRadius: 8, padding: "9px 12px", fontWeight: 600 }}>
-              Con {fmt(f.metrosEnviados)} m y un consumo de {fmt(prodSel.consumoTela)} m/prenda → deberían salir <b>{fmt(teoricas)} prendas</b>.
-            </div>
-          )}
           <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
             <BotonP onClick={salvar}>Crear orden</BotonP>
             <BotonS onClick={() => setF(null)}>Cancelar</BotonS>
