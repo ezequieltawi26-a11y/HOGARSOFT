@@ -1,5 +1,10 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { pdfOrden, pdfReciboEntrega, pdfPago, enviarPDF } from "./pdf.js";
+let pdfMod = null;
+let pdfModPromise = null;
+function cargarPdfMod() {
+  if (!pdfModPromise) pdfModPromise = import("./pdf.js").then((m) => { pdfMod = m; return m; });
+  return pdfModPromise;
+}
 
 /* ============================================================
    CONTROL TEXTIL — Sistema de producción para indumentaria
@@ -317,6 +322,7 @@ export default function App() {
         Cargando…
       </div>
     );
+  cargarPdfMod();
   if (!sesion) return <Ingreso cfg={cfg} data={data} alEntrar={setSesion} />;
 
   /* ---- Vista de taller (acceso limitado) ---- */
@@ -504,7 +510,7 @@ function ReciboWA({ data, recibo, cerrar }) {
               key={i}
               onClick={async () => {
                 const { doc, nombre } = e.crear();
-                await enviarPDF(doc, nombre, t, e.texto);
+                await pdfMod.enviarPDF(doc, nombre, t, e.texto);
               }}
               style={{ background: "#25D366", color: "#fff", padding: "8px 14px", fontWeight: 700 }}
             >
@@ -615,7 +621,7 @@ function VistaTaller({ data, guardar, notificar, taller }) {
     guardar({ ...data, ordenes });
     notificar(`Se enviaron ${fmt(c)} prendas. Falta que ${esCorte ? "la costura" : "la fábrica"} las acepte.`);
     if (!esCorte && ordenRef) {
-      const pdfFab = pdfReciboEntrega({
+      const pdfFab = pdfMod.pdfReciboEntrega({
         numero: ordenRef.numero, fecha: fFecha(rapido.fecha),
         tallerEntrega: taller.nombre, recibe: "Fábrica",
         nroRecibo: `#REC-${ordenRef.numero}-${taller.nombre}`,
@@ -623,7 +629,7 @@ function VistaTaller({ data, guardar, notificar, taller }) {
         cantidad: fmt(c), pendiente: fmt(ordenRef.pendiente),
         observaciones: "Envío pendiente de aceptación por fábrica.",
       });
-      enviarPDF(pdfFab, `recibo-envio-fabrica-${ordenRef.numero}.pdf`, { whatsapp: data.whatsappFabrica }, `Orden #${ordenRef.numero}: ${nombreProducto(data, rapido.productoId)} — envío de ${fmt(c)} prendas a fábrica.`);
+      pdfMod.enviarPDF(pdfFab, `recibo-envio-fabrica-${ordenRef.numero}.pdf`, { whatsapp: data.whatsappFabrica }, `Orden #${ordenRef.numero}: ${nombreProducto(data, rapido.productoId)} — envío de ${fmt(c)} prendas a fábrica.`);
     }
     setRapido({ ...rapido, cantidad: "" });
   };
@@ -865,7 +871,7 @@ function VistaTaller({ data, guardar, notificar, taller }) {
           }
           actualizarOrden(o, cambios, mov, msg);
           const prod = data.productos.find((x) => x.id === o.productoId) || {};
-          const pdfCostura = pdfOrden({
+          const pdfCostura = pdfMod.pdfOrden({
             numero: o.numero, fecha: fFecha(envC.fecha), fechaEntrega: fFecha(k.fpCostura),
             taller: nombreTaller(data, o.tallerCosturaId), destino: "costura",
             producto: nombreProducto(data, o.productoId), colores: prod.colores, medida: prod.medida,
@@ -878,7 +884,7 @@ function VistaTaller({ data, guardar, notificar, taller }) {
             observaciones: o.observaciones,
           });
           if ((specColores || []).some((c) => c.color.trim()) || (specMedidas || []).some((m) => m.nombre.trim())) guardarEspec();
-          enviarPDF(pdfCostura, `orden-confeccion-${o.numero}.pdf`, data.talleres.find((t) => t.id === o.tallerCosturaId), `Orden #${o.numero}: cortes entregados (${fmt(c)} prendas). Orden de confección adjunta.`);
+          pdfMod.enviarPDF(pdfCostura, `orden-confeccion-${o.numero}.pdf`, data.talleres.find((t) => t.id === o.tallerCosturaId), `Orden #${o.numero}: cortes entregados (${fmt(c)} prendas). Orden de confección adjunta.`);
           setEnvC({ ordenId: "", cantidad: "", tipo: "parcial", fecha: hoy() });
         };
         return (
@@ -986,7 +992,7 @@ function VistaTaller({ data, guardar, notificar, taller }) {
             msg = "Envío registrado. El dueño debe aceptar el faltante.";
           }
           actualizarOrden(o, cambios, mov, msg);
-          const pdfFab = pdfReciboEntrega({
+          const pdfFab = pdfMod.pdfReciboEntrega({
             numero: o.numero, fecha: fFecha(envCos.fecha),
             tallerEntrega: taller.nombre, recibe: "Fábrica",
             nroRecibo: `#REC-${o.numero}-${taller.nombre}`,
@@ -994,7 +1000,7 @@ function VistaTaller({ data, guardar, notificar, taller }) {
             cantidad: fmt(c), pendiente: fmt(k.enCostura - c),
             observaciones: "Envío pendiente de aceptación por fábrica.",
           });
-          enviarPDF(pdfFab, `recibo-envio-fabrica-${o.numero}.pdf`, { whatsapp: data.whatsappFabrica }, `Orden #${o.numero}: envío de ${fmt(c)} prendas a fábrica.`);
+          pdfMod.enviarPDF(pdfFab, `recibo-envio-fabrica-${o.numero}.pdf`, { whatsapp: data.whatsappFabrica }, `Orden #${o.numero}: envío de ${fmt(c)} prendas a fábrica.`);
           setEnvCos({ ordenId: "", cantidad: "", tipo: "parcial", fecha: hoy() });
         };
         return (
@@ -1343,7 +1349,7 @@ function EnvioAdmin({ data, guardar, notificar }) {
     if (ordenRef) {
       const prod = data.productos.find((x) => x.id === f.productoId) || {};
       if (f.flujo === "corte") {
-        const pdfCostura = pdfOrden({
+        const pdfCostura = pdfMod.pdfOrden({
           numero: ordenRef.numero, fecha: fFecha(f.fecha), fechaEntrega: fFecha(ordenRef.fechaPrometidaCostura || ordenRef.fechaPrometida),
           taller: nombreTaller(data, ordenRef.tallerCosturaId), destino: "costura",
           producto: nombreProducto(data, f.productoId), colores: prod.colores, medida: prod.medida,
@@ -1352,9 +1358,9 @@ function EnvioAdmin({ data, guardar, notificar }) {
           insumos: [["Tela cortada (cortes listos para armar)", fmt(c) + " prendas", "Entregados por el taller de corte " + nombreTaller(data, ordenRef.tallerCorteId)]],
           observaciones: ordenRef.observaciones,
         });
-        enviarPDF(pdfCostura, `orden-confeccion-${ordenRef.numero}.pdf`, data.talleres.find((t) => t.id === ordenRef.tallerCosturaId), `Orden #${ordenRef.numero}: cortes entregados (${fmt(c)} prendas). Orden de confección adjunta.`);
+        pdfMod.enviarPDF(pdfCostura, `orden-confeccion-${ordenRef.numero}.pdf`, data.talleres.find((t) => t.id === ordenRef.tallerCosturaId), `Orden #${ordenRef.numero}: cortes entregados (${fmt(c)} prendas). Orden de confección adjunta.`);
       } else {
-        const pdfFab = pdfReciboEntrega({
+        const pdfFab = pdfMod.pdfReciboEntrega({
           numero: ordenRef.numero, fecha: fFecha(f.fecha),
           tallerEntrega: nombreTaller(data, ordenRef.tallerCosturaId), recibe: "Fábrica",
           nroRecibo: `#REC-${ordenRef.numero}-Admin`,
@@ -1362,7 +1368,7 @@ function EnvioAdmin({ data, guardar, notificar }) {
           cantidad: fmt(c), pendiente: "—",
           observaciones: "Envío registrado por el dueño, pendiente de aceptación.",
         });
-        enviarPDF(pdfFab, `recibo-envio-fabrica-${ordenRef.numero}.pdf`, { whatsapp: data.whatsappFabrica }, `Orden #${ordenRef.numero}: envío de ${fmt(c)} prendas a fábrica.`);
+        pdfMod.enviarPDF(pdfFab, `recibo-envio-fabrica-${ordenRef.numero}.pdf`, { whatsapp: data.whatsappFabrica }, `Orden #${ordenRef.numero}: envío de ${fmt(c)} prendas a fábrica.`);
       }
     }
     setF({ ...f, cantidad: "" });
@@ -2170,7 +2176,7 @@ function Ordenes({ data, guardar, abrir, notificar }) {
       movimientos: [{ fecha: hoy(), detalle: `Orden creada. ${fmt(f.metrosEnviados)} m enviados a ${nombreTaller(data, f.tallerCorteId)}.` }],
     };
     guardar({ ...data, ordenes: [...data.ordenes, orden] });
-    const pdfC = pdfOrden({
+    const pdfC = pdfMod.pdfOrden({
       numero, fecha: fFecha(f.fechaCreacion), fechaEntrega: fFecha(f.fechaPrometidaCorte),
       taller: nombreTaller(data, f.tallerCorteId), destino: "corte",
       producto: nombreProducto(data, f.productoId), colores: p.colores, medida: p.medida,
@@ -2179,7 +2185,7 @@ function Ordenes({ data, guardar, abrir, notificar }) {
       insumos: [["Tela para corte", fmt(f.metrosEnviados) + " metros", `Consumo: ${fmt(p.consumoTela)} m/prenda`]],
       observaciones: f.observaciones,
     });
-    enviarPDF(pdfC, `orden-${numero}.pdf`, data.talleres.find((t) => t.id === f.tallerCorteId), `Orden #${numero} — ${nombreProducto(data, f.productoId)}. Orden de pedido adjunta.`);
+    pdfMod.enviarPDF(pdfC, `orden-${numero}.pdf`, data.talleres.find((t) => t.id === f.tallerCorteId), `Orden #${numero} — ${nombreProducto(data, f.productoId)}. Orden de pedido adjunta.`);
     setF(null);
     notificar(`Orden #${numero} creada. Deberían salir ${fmt(orden.prendasTeoricas)} prendas.`);
   };
@@ -2337,7 +2343,7 @@ function DetalleOrden({ data, guardar, ordenId, volver, notificar }) {
       "Entrega de corte registrada."
     );
     const prod = data.productos.find((x) => x.id === o.productoId) || {};
-    const pdfCostura = pdfOrden({
+    const pdfCostura = pdfMod.pdfOrden({
       numero: o.numero, fecha: fFecha(entrega.fecha), fechaEntrega: fFecha(k.fpCostura),
       taller: nombreTaller(data, o.tallerCosturaId), destino: "costura",
       producto: nombreProducto(data, o.productoId), colores: prod.colores, medida: prod.medida,
@@ -2348,7 +2354,7 @@ function DetalleOrden({ data, guardar, ordenId, volver, notificar }) {
       insumos: [["Tela cortada (cortes listos para armar)", fmt(c) + " prendas", "Entregados por el taller de corte " + nombreTaller(data, o.tallerCorteId)]],
       observaciones: o.observaciones,
     });
-    enviarPDF(pdfCostura, `orden-confeccion-${o.numero}.pdf`, data.talleres.find((t) => t.id === o.tallerCosturaId), `Orden #${o.numero}: cortes entregados (${fmt(c)} prendas). Orden de confección adjunta.`);
+    pdfMod.enviarPDF(pdfCostura, `orden-confeccion-${o.numero}.pdf`, data.talleres.find((t) => t.id === o.tallerCosturaId), `Orden #${o.numero}: cortes entregados (${fmt(c)} prendas). Orden de confección adjunta.`);
     setEntrega({ fecha: hoy(), cantidad: "" });
   };
 
@@ -2362,7 +2368,7 @@ function DetalleOrden({ data, guardar, ordenId, volver, notificar }) {
       "Recepción registrada. Stock actualizado."
     );
     const prodR = data.productos.find((x) => x.id === o.productoId) || {};
-    const pdfFab = pdfReciboEntrega({
+    const pdfFab = pdfMod.pdfReciboEntrega({
       numero: o.numero, fecha: fFecha(recep.fecha),
       tallerEntrega: nombreTaller(data, o.tallerCosturaId),
       recibe: recep.responsable || "Fábrica",
@@ -2371,7 +2377,7 @@ function DetalleOrden({ data, guardar, ordenId, volver, notificar }) {
       cantidad: fmt(c), pendiente: fmt(k.enCostura - c),
       observaciones: `Estado de la recepción: ${recep.estado}.${recep.obs ? " " + recep.obs : ""}`,
     });
-    enviarPDF(pdfFab, `recibo-recepcion-orden-${o.numero}.pdf`, { whatsapp: data.whatsappFabrica }, `Orden #${o.numero}: recepción en fábrica de ${fmt(c)} prendas.`);
+    pdfMod.enviarPDF(pdfFab, `recibo-recepcion-orden-${o.numero}.pdf`, { whatsapp: data.whatsappFabrica }, `Orden #${o.numero}: recepción en fábrica de ${fmt(c)} prendas.`);
     setRecep({ fecha: hoy(), cantidad: "", estado: "OK", responsable: "", obs: "" });
   };
 
@@ -2694,7 +2700,7 @@ function Pagos({ data, guardar, notificar }) {
     const t = data.talleres.find((x) => x.id === f.tallerId) || {};
     const dPrevio = deudaTaller(data, f.tallerId);
     const monto = Number(f.monto);
-    const pdfP = pdfPago({
+    const pdfP = pdfMod.pdfPago({
       nro: "#PAGO-" + (data.pagos.length + 1), fecha: fFecha(f.fecha),
       taller: t.nombre, tipoTaller: t.tipo === "corte" ? "Taller de corte" : "Taller de costura",
       concepto: f.obs || `Pago por servicios de ${t.tipo === "corte" ? "corte" : "confección"}`,
@@ -2704,7 +2710,7 @@ function Pagos({ data, guardar, notificar }) {
       saldoTexto: money(f.id ? dPrevio.saldo : dPrevio.saldo - monto),
       observaciones: f.obs,
     });
-    enviarPDF(pdfP, `comprobante-pago-${t.nombre}.pdf`, t, `Comprobante de pago: ${money(monto)} — ${t.nombre}.`);
+    pdfMod.enviarPDF(pdfP, `comprobante-pago-${t.nombre}.pdf`, t, `Comprobante de pago: ${money(monto)} — ${t.nombre}.`);
     setF(null);
     notificar(f.id ? "Pago modificado." : "Pago registrado.");
   };
