@@ -2,14 +2,25 @@
 <html lang="es">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover" />
     <title>Control Textil</title>
     <link rel="manifest" href="/manifest.json" />
     <link rel="icon" href="/icon-192.png" />
     <link rel="apple-touch-icon" href="/icon-192.png" />
     <meta name="theme-color" content="#1F2C4E" />
+    <style>
+      html, body { background: #F4F3EE; margin: 0; padding: 0; }
+      #splash {
+        position: fixed; inset: 0; background: #1F2C4E; color: #fff;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        font-family: 'Segoe UI', system-ui, sans-serif; z-index: 9999;
+      }
+      #splash b { font-size: 20px; letter-spacing: .02em; }
+      #splash span { width: 34px; height: 3px; background: #C88A2D; border-radius: 2px; margin-top: 8px; }
+    </style>
   </head>
   <body>
+    <div id="splash"><b>CONTROL TEXTIL</b><span></span></div>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
     <script>

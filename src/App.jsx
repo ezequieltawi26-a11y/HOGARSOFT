@@ -339,7 +339,14 @@ export default function App() {
           th { text-align: left; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: ${C.sub}; padding: 8px 10px; border-bottom: 2px solid ${C.line}; white-space: nowrap; }
           td { padding: 9px 10px; border-bottom: 1px solid ${C.line}; vertical-align: top; }
           tr:last-child td { border-bottom: none; }
-          .tabla { overflow-x: auto; }
+          .tabla { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+          @media (max-width: 640px) {
+            input, select, textarea { font-size: 16px; }
+            header { padding: 10px 12px !important; }
+            header span { font-size: 15px !important; }
+            main { padding: 14px 10px 50px !important; }
+            th, td { padding: 7px 8px; font-size: 12.5px; }
+          }
         `}</style>
         <header style={{ background: C.indigoDark, color: "#fff", padding: "14px 18px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
           <span style={{ fontSize: 17, fontWeight: 800 }}>CONTROL TEXTIL — {taller.nombre}</span>
@@ -389,8 +396,17 @@ export default function App() {
         th { text-align: left; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: ${C.sub}; padding: 8px 10px; border-bottom: 2px solid ${C.line}; white-space: nowrap; }
         td { padding: 9px 10px; border-bottom: 1px solid ${C.line}; vertical-align: top; }
         tr:last-child td { border-bottom: none; }
-        .tabla { overflow-x: auto; }
+        .tabla { overflow-x: auto; -webkit-overflow-scrolling: touch; }
         @media print { .no-print { display: none !important; } }
+        @media (max-width: 640px) {
+          input, select, textarea { font-size: 16px; }
+          header.no-print { padding: 10px 12px !important; gap: 8px !important; }
+          header.no-print span:first-child { font-size: 16px !important; }
+          header.no-print button { padding: 6px 11px !important; font-size: 13px !important; }
+          main { padding: 14px 10px 50px !important; }
+          th, td { padding: 7px 8px; font-size: 12.5px; }
+          h2 { font-size: 18px !important; }
+        }
       `}</style>
 
       {/* ---------- Encabezado ---------- */}
