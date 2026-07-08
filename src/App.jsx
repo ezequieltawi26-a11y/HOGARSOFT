@@ -195,24 +195,25 @@ async function nubeGuardar(cfg, datos) {
 }
 
 /* ============ Pantalla de configuración (primera vez) ============ */
+const SUPABASE_URL = "https://gzrqudpctkjaumnqobgg.supabase.co";
+const SUPABASE_KEY = "sb_publishable_dovcuLxauPCc0_p5u3OGrw_fKi72rMA";
+
 function Configuracion({ alListo }) {
-  const [url, setUrl] = useState("");
-  const [key, setKey] = useState("");
   const [pin, setPin] = useState("");
   const [error, setError] = useState("");
   const [probando, setProbando] = useState(false);
 
   const conectar = async () => {
-    if (!url || !key || !pin) return setError("Completá los tres campos.");
+    if (!pin) return setError("Elegí un PIN.");
     setProbando(true);
     setError("");
-    const cfg = { url: url.trim().replace(/\/$/, ""), key: key.trim(), pin: pin.trim() };
+    const cfg = { url: SUPABASE_URL, key: SUPABASE_KEY, pin: pin.trim() };
     try {
       await nubeCargar(cfg);
       localStorage.setItem("textil-config", JSON.stringify(cfg));
       alListo(cfg);
     } catch (e) {
-      setError("No se pudo conectar. Revisá la URL y la clave, y que hayas creado la tabla en Supabase.");
+      setError("No se pudo conectar. Probá de nuevo en unos segundos.");
     }
     setProbando(false);
   };
@@ -221,16 +222,8 @@ function Configuracion({ alListo }) {
     <div style={{ minHeight: "100vh", background: C.bg, display: "grid", placeItems: "center", padding: 16, fontFamily: "'Segoe UI', system-ui, sans-serif" }}>
       <div style={{ background: "#fff", border: `1px solid ${C.line}`, borderRadius: 14, padding: 24, maxWidth: 440, width: "100%" }}>
         <h2 style={{ margin: "0 0 4px", color: C.indigoDark }}>Control Textil</h2>
-        <p style={{ color: C.sub, marginTop: 0 }}>Configuración inicial (una sola vez por dispositivo). Pegá los datos de tu proyecto de Supabase.</p>
-        <Campo label="URL del proyecto (Project URL)">
-          <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://xxxx.supabase.co" />
-        </Campo>
-        <div style={{ height: 10 }} />
-        <Campo label="Clave pública (anon public key)">
-          <input value={key} onChange={(e) => setKey(e.target.value)} placeholder="eyJhbGciOi..." />
-        </Campo>
-        <div style={{ height: 10 }} />
-        <Campo label="Elegí un PIN de acceso (para entrar a la app)">
+        <p style={{ color: C.sub, marginTop: 0 }}>Configuración inicial (una sola vez por dispositivo).</p>
+        <Campo label="Elegí un PIN de acceso para el administrador">
           <input value={pin} onChange={(e) => setPin(e.target.value)} placeholder="Ej: 4582" />
         </Campo>
         {error && <div style={{ color: C.bad, marginTop: 10, fontWeight: 600 }}>{error}</div>}
