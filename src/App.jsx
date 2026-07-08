@@ -592,7 +592,7 @@ function BarraHilo({ k }) {
 function VistaTaller({ data, guardar, notificar, taller }) {
   const esCorte = taller.tipo === "corte";
   const d = deudaTaller(data, taller.id);
-  const [tab, setTab] = useState("aceptar");
+  const [tab, setTab] = useState("panel");
   const [rapido, setRapido] = useState({ productoId: "", cantidad: "", fecha: hoy() });
   const [envCos, setEnvCos] = useState({ ordenId: "", cantidad: "", tipo: "parcial", fecha: hoy() });
   const [envC, setEnvC] = useState({ ordenId: "", cantidad: "", tipo: "parcial", fecha: hoy() });
@@ -692,6 +692,7 @@ function VistaTaller({ data, guardar, notificar, taller }) {
   );
 
   const botones = [
+    ["panel", "Panel"],
     ["aceptar", `Por aceptar${pendientes.length ? " (" + pendientes.length + ")" : ""}`],
     ...(!esCorte ? [["recibidos", "Pedidos recibidos"]] : []),
     ["saldo", "Lo que me deben"],
@@ -719,6 +720,72 @@ function VistaTaller({ data, guardar, notificar, taller }) {
           <button key={k} onClick={() => setTab(k)} style={{ padding: "9px 15px", borderRadius: 20, fontWeight: 700, background: tab === k ? C.indigo : "#EDEBE4", color: tab === k ? "#fff" : C.ink }}>{n}</button>
         ))}
       </div>
+
+      {tab === "panel" && (() => {
+        const atrasadas = activas.filter(({ k }) => k.color === "bad");
+        const proximas = activas
+          .map(({ o, k }) => ({ o, k, fecha: esCorte ? k.fpCorte : k.fpCostura }))
+          .filter((x) => x.fecha)
+          .sort((a, b) => a.fecha.localeCompare(b.fecha))
+          .slice(0, 3);
+        const stockTotal = Object.values(stockProd).reduce((a, b) => a + b, 0);
+        return (
+          <>
+            <Card style={{ marginBottom: 14 }}>
+              <b>Hola, {taller.nombre}</b>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px,1fr))", gap: 12, marginTop: 12 }}>
+                <Dato l="Órdenes activas" v={fmt(activas.length)} />
+                <Dato l="Prendas en mi taller" v={fmt(stockTotal)} color={C.hilo} />
+                <Dato l="Por aceptar" v={fmt(pendientes.length)} color={pendientes.length ? C.warn : undefined} />
+                <Dato l="Atrasadas" v={fmt(atrasadas.length)} color={atrasadas.length ? C.bad : C.ok} />
+              </div>
+            </Card>
+
+            <Card style={{ marginBottom: 14 }}>
+              <b>Plata</b>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px,1fr))", gap: 12, marginTop: 12 }}>
+                <Dato l="A cobrar" v={money(d.saldo)} color={d.saldo > 0 ? C.bad : C.ok} />
+                <Dato l="Trabajo este mes" v={money(trabajoMes)} />
+                <Dato l="Cobrado este mes" v={money(pagosMes)} color={C.ok} />
+              </div>
+            </Card>
+
+            {pendientes.length > 0 && (
+              <Card style={{ marginBottom: 14, borderLeft: `4px solid ${C.warn}` }}>
+                <b style={{ color: C.warn }}>⚠ Tenés {pendientes.length} entrega{pendientes.length === 1 ? "" : "s"} por aceptar</b>
+                <div style={{ fontSize: 13, color: C.sub, marginTop: 4 }}>Andá a la pestaña «Por aceptar» para revisarlas.</div>
+              </Card>
+            )}
+
+            {atrasadas.length > 0 && (
+              <Card style={{ marginBottom: 14, borderLeft: `4px solid ${C.bad}` }}>
+                <b style={{ color: C.bad }}>⚠ Tenés {atrasadas.length} orden{atrasadas.length === 1 ? "" : "es"} atrasada{atrasadas.length === 1 ? "" : "s"}</b>
+                <div style={{ marginTop: 8 }}>
+                  {atrasadas.slice(0, 3).map(({ o, k }) => (
+                    <div key={o.id} style={{ fontSize: 13, padding: "4px 0" }}>#{o.numero} — {nombreProducto(data, o.productoId)}: <b style={{ color: C.bad }}>{k.estado}</b></div>
+                  ))}
+                </div>
+              </Card>
+            )}
+
+            <Card>
+              <b>Próximas entregas</b>
+              {proximas.length === 0 ? (
+                <Vacio>No tenés fechas de entrega cargadas todavía.</Vacio>
+              ) : (
+                <div style={{ marginTop: 10 }}>
+                  {proximas.map(({ o, k, fecha }) => (
+                    <div key={o.id} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: `1px solid ${C.line}` }}>
+                      <span>#{o.numero} — {nombreProducto(data, o.productoId)}</span>
+                      <b style={{ color: k.color === "bad" ? C.bad : C.ink }}>{fFecha(fecha)}</b>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Card>
+          </>
+        );
+      })()}
 
       {tab === "aceptar" && (
         <Card>
@@ -1240,7 +1307,7 @@ function VistaTaller({ data, guardar, notificar, taller }) {
         </>
       )}
 
-      {tab !== "descuentos" && (
+      {tab !== "descuentos" && tab !== "panel" && (
       <Card style={{ marginTop: 16, background: "#FAF9F5" }}>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px,1fr))", gap: 12 }}>
           <Dato l="Órdenes activas" v={fmt(activas.length)} />
