@@ -392,6 +392,7 @@ export default function App() {
     ["envio", "Enviar"],
     ["stock", "Stock"],
     ["ordenes", "Órdenes"],
+    ["enproduccion", "En producción"],
     ["combinados", "Combinados"],
     ["borradores", "Borradores"],
     ["productos", "Productos"],
@@ -467,6 +468,7 @@ export default function App() {
           <DetalleOrden data={data} guardar={guardar} ordenId={ordenAbierta} volver={() => setOrdenAbierta(null)} notificar={notificar} />
         )}
         {vista === "combinados" && <Combinados data={data} abrir={(id) => { setVista("ordenes"); setOrdenAbierta(id); }} />}
+        {vista === "enproduccion" && <OrdenesEnProduccion data={data} abrir={(id) => { setVista("ordenes"); setOrdenAbierta(id); }} />}
         {vista === "borradores" && <Borradores data={data} guardar={guardar} notificar={notificar} />}
         {vista === "confirmar" && <ConfirmarAdmin data={data} guardar={guardar} notificar={notificar} />}
         {vista === "envio" && <EnvioAdmin data={data} guardar={guardar} notificar={notificar} />}
@@ -701,7 +703,7 @@ function VistaTaller({ data, guardar, notificar, taller }) {
     ["enviar", "Enviar productos"],
     ["stock", "Mi stock"],
     ["descuentos", "Descuentos"],
-    ["ordenes", "Todas las órdenes"],
+    ["ordenes", "Órdenes en producción"],
   ];
 
   const [prop, setProp] = useState({});
@@ -1238,8 +1240,8 @@ function VistaTaller({ data, guardar, notificar, taller }) {
 
       {tab === "ordenes" && (
         <>
-          {todas.length === 0 && <Card><Vacio>Todavía no tenés órdenes.</Vacio></Card>}
-          {todas.slice().reverse().map(({ o, k }) => (
+          {activas.length === 0 && <Card><Vacio>No tenés órdenes en producción ahora mismo.</Vacio></Card>}
+          {activas.slice().reverse().map(({ o, k }) => (
             <Card key={o.id} style={{ marginBottom: 14 }}>
               {o.grupoId && (
                 <div style={{ marginBottom: 8 }}><Chip tipo="warn">Pedido combinado #{o.grupoNumero}</Chip></div>
@@ -1250,9 +1252,12 @@ function VistaTaller({ data, guardar, notificar, taller }) {
               </div>
               <BarraHilo k={k} />
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px,1fr))", gap: 12, margin: "12px 0" }}>
+                <Dato l="Tela enviada" v={fmt(o.metrosEnviados) + " m"} />
+                <Dato l="Pedido total" v={fmt(k.teoricas) + " u."} />
+                <Dato l="Taller de corte" v={nombreTaller(data, o.tallerCorteId)} />
+                <Dato l="Taller de costura" v={nombreTaller(data, o.tallerCosturaId)} />
                 {esCorte ? (
                   <>
-                    <Dato l="A cortar" v={fmt(k.teoricas)} />
                     <Dato l="Enviadas" v={fmt(k.cortadas)} />
                     <Dato l="Pendientes" v={fmt(k.enCorte)} color={C.hilo} />
                     <Dato l="Entrega" v={fFecha(k.fpCorte)} />
@@ -1266,6 +1271,25 @@ function VistaTaller({ data, guardar, notificar, taller }) {
                   </>
                 )}
               </div>
+
+              {((o.coloresSpec && o.coloresSpec.length > 0) || (o.medidasSpec && o.medidasSpec.length > 0)) && (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px,1fr))", gap: 12, marginBottom: 10, background: "#FAF9F5", border: `1px solid ${C.line}`, borderRadius: 8, padding: 10 }}>
+                  {o.coloresSpec && o.coloresSpec.length > 0 && (
+                    <div>
+                      <b style={{ fontSize: 12 }}>Colores y cantidades</b>
+                      {o.coloresSpec.map((c, i) => <div key={i} style={{ fontSize: 13 }}>{c.color}: <b>{fmt(c.cantidad)}</b></div>)}
+                    </div>
+                  )}
+                  {o.medidasSpec && o.medidasSpec.length > 0 && (
+                    <div>
+                      <b style={{ fontSize: 12 }}>Medidas</b>
+                      {o.medidasSpec.map((m, i) => <div key={i} style={{ fontSize: 13 }}>{m.nombre}: <b>{m.medida}</b></div>)}
+                    </div>
+                  )}
+                </div>
+              )}
+              {o.observaciones && <div style={{ fontSize: 13, color: C.sub, marginBottom: 10 }}>Obs.: {o.observaciones}</div>}
+
               {esCorte && (() => {
                 const metros = Number(o.metrosEnviados);
                 const consumo = Number(o.consumoUsado);
@@ -1301,7 +1325,7 @@ function VistaTaller({ data, guardar, notificar, taller }) {
                   </tbody>
                 </table>
               )}
-              <table>
+              <table style={{ marginBottom: 10 }}>
                 <thead><tr><th>{esCorte ? "Mis envíos a costura" : "Mis envíos a fábrica"}</th><th>Cantidad</th><th>Estado</th></tr></thead>
                 <tbody>
                   {(esCorte ? o.entregasCorte || [] : o.recepciones || []).length === 0 && <tr><td colSpan={3} style={{ color: C.sub }}>Sin envíos todavía.</td></tr>}
@@ -1310,6 +1334,19 @@ function VistaTaller({ data, guardar, notificar, taller }) {
                   ))}
                 </tbody>
               </table>
+
+              {o.movimientos && o.movimientos.length > 0 && (
+                <div style={{ marginTop: 4 }}>
+                  <b style={{ fontSize: 12, color: C.sub }}>HISTORIAL COMPLETO</b>
+                  <div style={{ marginTop: 6 }}>
+                    {o.movimientos.slice().reverse().map((m, i) => (
+                      <div key={i} style={{ fontSize: 12.5, padding: "5px 0", borderBottom: i < o.movimientos.length - 1 ? `1px solid ${C.line}` : "none" }}>
+                        <b>{fFecha(m.fecha)}</b> — {m.detalle}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </Card>
           ))}
         </>
@@ -1692,6 +1729,79 @@ function Combinados({ data, abrir }) {
     </div>
   );
 }
+
+/* ============ ÓRDENES EN PRODUCCIÓN (todo el detalle, de un vistazo) ============ */
+function OrdenesEnProduccion({ data, abrir }) {
+  const activas = data.ordenes
+    .map((o) => ({ o, k: calcOrden(o) }))
+    .filter(({ k }) => !k.estado.startsWith("Finalizado"))
+    .sort((a, b) => b.o.numero - a.o.numero);
+
+  return (
+    <div>
+      <Titulo>Órdenes en producción</Titulo>
+      <div style={{ fontSize: 12, color: C.sub, marginBottom: 14 }}>
+        Todas las órdenes activas, con cómo se mandaron, colores, medidas y todo el detalle. Tocá una para ver el historial completo.
+      </div>
+      {activas.length === 0 ? (
+        <Card><Vacio>No hay órdenes en producción ahora mismo.</Vacio></Card>
+      ) : (
+        activas.map(({ o, k }) => {
+          const prod = data.productos.find((p) => p.id === o.productoId) || {};
+          return (
+            <Card key={o.id} style={{ marginBottom: 14, cursor: "pointer" }} onClick={() => abrir(o.id)}>
+              {o.grupoId && (
+                <div style={{ marginBottom: 8 }}><Chip tipo="warn">Pedido combinado #{o.grupoNumero}</Chip></div>
+              )}
+              <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
+                <b>Orden #{o.numero} — {nombreProducto(data, o.productoId)}</b>
+                <Chip tipo={k.color}>{k.estado}</Chip>
+              </div>
+              <BarraHilo k={k} />
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px,1fr))", gap: 12, margin: "12px 0" }}>
+                <Dato l="Tela enviada" v={`${fmt(o.metrosEnviados)} m`} />
+                <Dato l="Pedido total" v={`${fmt(k.teoricas)} u.`} />
+                <Dato l="Taller de corte" v={nombreTaller(data, o.tallerCorteId)} />
+                <Dato l="Taller de costura" v={nombreTaller(data, o.tallerCosturaId)} />
+                <Dato l="En corte" v={fmt(k.enCorte)} />
+                <Dato l="En costura" v={fmt(k.enCostura)} color={C.hilo} />
+                <Dato l="En fábrica" v={fmt(k.recibidas)} color={C.ok} />
+                <Dato l="Entrega corte" v={fFecha(k.fpCorte)} />
+                <Dato l="Entrega costura" v={fFecha(k.fpCostura)} color={k.color === "bad" ? C.bad : undefined} />
+              </div>
+              {((o.coloresSpec && o.coloresSpec.length > 0) || (o.medidasSpec && o.medidasSpec.length > 0)) && (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px,1fr))", gap: 12, background: "#FAF9F5", border: `1px solid ${C.line}`, borderRadius: 8, padding: 10 }}>
+                  {o.coloresSpec && o.coloresSpec.length > 0 && (
+                    <div>
+                      <b style={{ fontSize: 12 }}>Colores y cantidades</b>
+                      {o.coloresSpec.map((c, i) => <div key={i} style={{ fontSize: 13 }}>{c.color}: <b>{fmt(c.cantidad)}</b></div>)}
+                    </div>
+                  )}
+                  {o.medidasSpec && o.medidasSpec.length > 0 && (
+                    <div>
+                      <b style={{ fontSize: 12 }}>Medidas</b>
+                      {o.medidasSpec.map((m, i) => <div key={i} style={{ fontSize: 13 }}>{m.nombre}: <b>{m.medida}</b></div>)}
+                    </div>
+                  )}
+                </div>
+              )}
+              {o.observaciones && <div style={{ fontSize: 13, color: C.sub, marginTop: 8 }}>Obs.: {o.observaciones}</div>}
+              <div style={{ fontSize: 12, color: C.indigo, marginTop: 10, fontWeight: 700 }}>Tocá para ver el historial completo →</div>
+            </Card>
+          );
+        })
+      )}
+    </div>
+  );
+}
+
+/* Datos pequeños, reutilizable */
+const Dato = ({ l, v, color }) => (
+  <div>
+    <div style={{ fontSize: 11, color: C.sub, fontWeight: 700, textTransform: "uppercase" }}>{l}</div>
+    <div style={{ fontSize: 15, fontWeight: 800, color: color || C.ink }}>{v}</div>
+  </div>
+);
 
 /* ============ PANEL ============ */
 function Panel({ data, ir }) {
