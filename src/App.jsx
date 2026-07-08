@@ -1254,14 +1254,12 @@ function VistaTaller({ data, guardar, notificar, taller }) {
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px,1fr))", gap: 12, margin: "12px 0" }}>
                 <Dato l="Tela enviada" v={fmt(o.metrosEnviados) + " m"} />
                 <Dato l="Pedido total" v={fmt(k.teoricas) + " u."} />
-                <Dato l="Taller de corte" v={nombreTaller(data, o.tallerCorteId)} />
-                <Dato l="Taller de costura" v={nombreTaller(data, o.tallerCosturaId)} />
+                <Dato l={esCorte ? "Taller de costura" : "Taller de corte"} v={nombreTaller(data, esCorte ? o.tallerCosturaId : o.tallerCorteId)} />
                 {esCorte ? (
                   <>
                     <Dato l="Enviadas" v={fmt(k.cortadas)} />
                     <Dato l="Pendientes" v={fmt(k.enCorte)} color={C.hilo} />
                     <Dato l="Entrega" v={fFecha(k.fpCorte)} />
-                    <Dato l="Desperdicio de tela" v={fmt(k.pctDespTeorico) + " %"} color={k.pctDespTeorico > 10 ? C.bad : C.sub} />
                   </>
                 ) : (
                   <>
@@ -2832,7 +2830,6 @@ function DetalleOrden({ data, guardar, ordenId, volver, notificar }) {
           <Dato l="En costura" v={fmt(k.enCostura)} color={C.hilo} />
           <Dato l="Recibidas en fábrica" v={fmt(k.recibidas)} color={C.ok} />
           <Dato l="Pendientes de corte" v={fmt(k.enCorte)} />
-          <Dato l="Desperdicio de tela" v={fmt(k.pctDespTeorico) + " %"} color={k.pctDespTeorico > 10 ? C.bad : undefined} />
           <Dato l="Entrega corte" v={fFecha(k.fpCorte)} />
           <Dato l="Entrega costura" v={fFecha(k.fpCostura)} color={k.color === "bad" ? C.bad : undefined} />
         </div>
